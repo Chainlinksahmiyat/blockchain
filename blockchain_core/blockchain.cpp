@@ -2,12 +2,15 @@
 // Written from scratch in C++
 
 #include "blockchain.h"
+#include "ecdsa_utils.h"
+#include "storage.h"
 #include <sstream>
 #include <iostream>
 #include <openssl/sha.h>
 #include <fstream>
 #include <iomanip>
 #include <random>
+#include <ctime>
 
 Blockchain::Blockchain() {
     createGenesisBlock();
@@ -40,13 +43,36 @@ std::string Blockchain::calculateHash(const Block& block) const {
     return out.str();
 }
 
+void Blockchain::logError(const std::string& message) {
+    std::ofstream log("blockchain_error.log", std::ios::app);
+    std::time_t now = std::time(nullptr);
+    log << std::put_time(std::localtime(&now), "%Y-%m-%d %H:%M:%S") << " [ERROR] " << message << std::endl;
+}
+
 bool Blockchain::addTransaction(const Transaction& tx) {
-    // For demo: skip signature verification
+    // Enforce signature verification using public key
+    std::string expectedAddress;
+    {
+        unsigned char hash[SHA256_DIGEST_LENGTH];
+        SHA256((const unsigned char*)tx.publicKeyPem.data(), tx.publicKeyPem.size(), hash);
+        std::stringstream ss;
+        for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+        expectedAddress = ss.str();
+    }
+    if (tx.sender != expectedAddress) {
+        logError("Transaction sender address does not match public key.");
+        return false;
+    }
+    if (!Wallet::verify(tx.sender + tx.receiver + std::to_string(tx.amount), tx.signature, tx.publicKeyPem)) {
+        logError("Invalid transaction signature for sender: " + tx.sender);
+        return false;
+    }
     mempool.push_back(tx);
     return true;
 }
 
 bool Blockchain::addContent(const Content& content, const std::string& miner) {
+    // Optionally, verify content signature if you add one
     pendingContents.push_back(content);
     return true;
 }
@@ -91,77 +117,34 @@ bool Blockchain::isValidChain() const {
 }
 
 bool Blockchain::saveToFile(const std::string& filename) const {
-    std::ofstream out(filename);
-    if (!out) return false;
-    for (const auto& block : chain) {
-        out << block.index << ' ' << block.prevHash << ' ' << block.hash << ' ' << block.timestamp << ' ' << block.miner << ' ' << block.nonce << ' ' << block.difficulty << '\n';
-        for (const auto& tx : block.transactions) {
-            out << "TX " << tx.sender << ' ' << tx.receiver << ' ' << tx.amount << ' ' << tx.signature << '\n';
-        }
-        for (const auto& c : block.contents) {
-            out << "CT " << c.type << ' ' << c.filename << ' ' << c.uploader << ' ' << c.hash << ' ' << c.timestamp << '\n';
-        }
-    }
-    return true;
+    return fileStorage.saveChain(chain, filename);
 }
 
 bool Blockchain::loadFromFile(const std::string& filename) {
-    std::ifstream in(filename);
-    if (!in) return false;
-    chain.clear();
-    std::string line;
-    Block block;
-    while (std::getline(in, line)) {
-        if (line.substr(0, 2) == "TX") {
-            std::istringstream iss(line.substr(3));
-            Transaction tx;
-            iss >> tx.sender >> tx.receiver >> tx.amount >> tx.signature;
-            block.transactions.push_back(tx);
-        } else if (line.substr(0, 2) == "CT") {
-            std::istringstream iss(line.substr(3));
-            Content c;
-            iss >> c.type >> c.filename >> c.uploader >> c.hash >> c.timestamp;
-            block.contents.push_back(c);
-        } else {
-            if (block.index != 0 || !block.hash.empty()) chain.push_back(block);
-            block = Block();
-            std::istringstream iss(line);
-            iss >> block.index >> block.prevHash >> block.hash >> block.timestamp >> block.miner >> block.nonce >> block.difficulty;
-        }
-    }
-    if (block.index != 0 || !block.hash.empty()) chain.push_back(block);
-    return true;
+    return fileStorage.loadChain(chain, filename);
 }
 
 Wallet::Wallet() {
-    // Simple random address and private key (for demo)
-    address = generateAddress();
-    privateKey = generateAddress();
-}
-
-std::string Wallet::generateAddress() {
-    static const char alphanum[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-    std::string addr;
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> dis(0, sizeof(alphanum) - 2);
-    for (int i = 0; i < 32; ++i) addr += alphanum[dis(gen)];
-    return addr;
-}
-
-std::string Wallet::sign(const std::string& data, const std::string& privKey) {
-    // For demo: just return hash(data+privKey)
-    std::string input = data + privKey;
+    // Generate ECDSA key pair
+    generateKeyPair(privateKeyPem, publicKeyPem);
+    // Use hash of public key as address
     unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256((unsigned char*)input.c_str(), input.size(), hash);
+    SHA256((const unsigned char*)publicKeyPem.data(), publicKeyPem.size(), hash);
     std::stringstream ss;
     for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
-    return ss.str();
+    address = ss.str();
 }
 
-bool Wallet::verify(const std::string& data, const std::string& signature, const std::string& address) {
-    // For demo: just check if signature == sign(data, address)
-    return sign(data, address) == signature;
+bool Wallet::generateKeyPair(std::string& privPem, std::string& pubPem) {
+    return ECDSAUtils::generateKeyPair(privPem, pubPem);
+}
+
+std::string Wallet::sign(const std::string& data, const std::string& privKeyPem) {
+    return ECDSAUtils::sign(data, privKeyPem);
+}
+
+bool Wallet::verify(const std::string& data, const std::string& signature, const std::string& pubKeyPem) {
+    return ECDSAUtils::verify(data, signature, pubKeyPem);
 }
 
 std::vector<Block> Blockchain::getChain() const {

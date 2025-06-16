@@ -1,31 +1,20 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Box, Coins, Users, Image, Zap } from "lucide-react";
-import { useState } from "react";
+import { useEffect } from "react";
 
 export default function Landing() {
-  // Wallet-based auth state
-  const [wallet, setWallet] = useState<string | null>(null);
-  const [backup, setBackup] = useState<string | null>(null);
-  const [importValue, setImportValue] = useState("");
+  useEffect(() => {
+    // If already authenticated, redirect to dashboard
+    fetch("/api/auth/user", { credentials: "include" })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data && data.userId) window.location.href = "/"; });
+  }, []);
 
-  // Generate a new wallet (for demo: random string, use real crypto in prod)
-  const handleCreateWallet = () => {
-    const newWallet = `WALLET_${Math.random().toString(36).slice(2)}`;
-    setWallet(newWallet);
-    setBackup(newWallet); // In real app, show/save private key or mnemonic
-    localStorage.setItem("wallet", newWallet);
+  const handleLogin = () => {
+    window.location.href = "/api/login";
   };
 
-  // Import wallet from backup
-  const handleImportWallet = () => {
-    if (importValue.trim()) {
-      setWallet(importValue.trim());
-      localStorage.setItem("wallet", importValue.trim());
-    }
-  };
-
-  // UI
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50">
       <div className="container mx-auto px-4 py-8">
@@ -112,35 +101,10 @@ export default function Landing() {
               <div className="w-16 h-16 bg-gradient-to-r from-facebook-blue to-mining-reward rounded-full flex items-center justify-center mx-auto mb-4">
                 <Zap className="text-white text-xl" />
               </div>
-              <h3 className="text-2xl font-bold mb-4">Wallet Sign Up / Sign In</h3>
-              {!wallet ? (
-                <>
-                  <Button onClick={handleCreateWallet} className="w-full bg-facebook-blue hover:bg-blue-600 text-white py-3 text-lg mb-4">
-                    Create New Wallet
-                  </Button>
-                  <div className="my-4 text-text-secondary">or</div>
-                  <input
-                    type="text"
-                    placeholder="Paste your wallet backup here"
-                    value={importValue}
-                    onChange={e => setImportValue(e.target.value)}
-                    className="w-full border rounded px-3 py-2 mb-2"
-                  />
-                  <Button onClick={handleImportWallet} className="w-full bg-blockchain-accent hover:bg-blue-600 text-white py-3 text-lg">
-                    Import Wallet
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <div className="mb-4">
-                    <div className="font-mono text-sm break-all">Wallet: {wallet}</div>
-                    {backup && (
-                      <div className="mt-2 text-xs text-green-700">Backup this: <span className="font-mono">{backup}</span></div>
-                    )}
-                  </div>
-                  <div className="text-green-700 font-bold">You are signed in!</div>
-                </>
-              )}
+              <h3 className="text-2xl font-bold mb-4">Sign In to Continue</h3>
+              <Button onClick={handleLogin} className="w-full bg-facebook-blue hover:bg-blue-600 text-white py-3 text-lg">
+                Sign In with Replit
+              </Button>
             </CardContent>
           </Card>
         </div>

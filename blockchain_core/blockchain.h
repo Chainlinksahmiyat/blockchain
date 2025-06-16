@@ -15,20 +15,23 @@
 #include <fstream>
 #include <iomanip>
 #include <random>
+#include "ecdsa_utils.h"
 
 struct Transaction {
-    std::string sender;
+    std::string sender; // address (hash of public key)
     std::string receiver;
     double amount;
     std::string signature;
+    std::string publicKeyPem; // sender's public key in PEM
 };
 
 struct Content {
     std::string type; // image, meme, video, memory
     std::string filename;
-    std::string uploader;
+    std::string uploader; // address (hash of public key)
     std::string hash;
     std::time_t timestamp;
+    std::string publicKeyPem; // uploader's public key in PEM
 };
 
 struct Block {
@@ -46,11 +49,12 @@ struct Block {
 class Wallet {
 public:
     std::string address;
-    std::string privateKey;
+    std::string privateKeyPem;
+    std::string publicKeyPem;
     Wallet();
-    static std::string generateAddress();
-    static std::string sign(const std::string& data, const std::string& privKey);
-    static bool verify(const std::string& data, const std::string& signature, const std::string& address);
+    static bool generateKeyPair(std::string& privPem, std::string& pubPem);
+    static std::string sign(const std::string& data, const std::string& privKeyPem);
+    static bool verify(const std::string& data, const std::string& signature, const std::string& pubKeyPem);
 };
 
 class Blockchain {

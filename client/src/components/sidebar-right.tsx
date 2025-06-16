@@ -10,10 +10,11 @@ interface TopMiner extends User {
 }
 
 export default function SidebarRight() {
-  const { data: topMiners = [] } = useQuery<TopMiner[]>({
+  const { data: topMinersRaw } = useQuery<TopMiner[]>({
     queryKey: ['/api/stats/top-miners'],
     retry: false,
   });
+  const topMiners = Array.isArray(topMinersRaw) ? topMinersRaw : [];
 
   const { data: transactions = [] } = useQuery<Transaction[]>({
     queryKey: ['/api/transactions'],
