@@ -9,6 +9,7 @@ import { validateFileType, scanFileForVirus } from './uploadUtils';
 import { authRateLimiter } from './rateLimiters';
 import { PostService } from './postService';
 import { StatsService } from './statsService';
+import { uploadFileToS3 } from './s3Upload';
 
 // Configure multer for file uploads
 const uploadDir = path.join(process.cwd(), 'uploads');
@@ -95,10 +96,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/posts', isAuthenticated, upload.single('file'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      let imageUrl;
+      if (req.file) {
+        // Upload to S3 and get public URL
+        const s3Key = `uploads/${Date.now()}-${req.file.filename}`;
+        imageUrl = await uploadFileToS3(req.file.path, s3Key);
+        // Optionally delete local file after upload
+        fs.unlinkSync(req.file.path);
+      }
       const postData = {
         ...req.body,
         userId,
-        imageUrl: req.file ? `/uploads/${req.file.filename}` : undefined,
+        imageUrl,
       };
       const result = await PostService.createPost(postData, req.file, userId);
       res.json(result);

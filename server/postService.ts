@@ -2,7 +2,7 @@
 import { callBlockchainCore } from './blockchain';
 
 export class PostService {
-  static async createPost(postData: any, file: Express.Multer.File | undefined, userId: string) {
+  static async createPost(postData: any, file: any, userId: string) {
     // Calculate mining reward based on content type
     let reward = 25; // Base reward
     if (postData.postType === 'meme') reward = 45;
