@@ -77,6 +77,25 @@ bool Blockchain::addContent(const Content& content, const std::string& miner) {
     return true;
 }
 
+bool Blockchain::validProof(const Block& block) const {
+    // Check if hash meets difficulty requirement
+    return block.hash.substr(0, block.difficulty) == std::string(block.difficulty, '0');
+}
+
+void Blockchain::adjustDifficulty() {
+    int n = adjustmentInterval;
+    if (chain.size() <= n) return;
+    const Block& last = chain.back();
+    const Block& prev = chain[chain.size() - n - 1];
+    int actualTime = static_cast<int>(last.timestamp - prev.timestamp);
+    int expectedTime = n * targetBlockTime;
+    if (actualTime < expectedTime / 2) {
+        difficulty++;
+    } else if (actualTime > expectedTime * 2 && difficulty > 1) {
+        difficulty--;
+    }
+}
+
 bool Blockchain::mineBlock(const std::string& miner) {
     if (mempool.empty() && pendingContents.empty()) return false;
     Block newBlock;
@@ -88,12 +107,18 @@ bool Blockchain::mineBlock(const std::string& miner) {
     newBlock.miner = miner;
     newBlock.difficulty = difficulty;
     newBlock.nonce = 0;
-    // Proof-of-Work
+    // Improved Proof-of-Work: use validProof for clarity
     do {
         newBlock.nonce++;
         newBlock.hash = calculateHash(newBlock);
-    } while (newBlock.hash.substr(0, difficulty) != std::string(difficulty, '0'));
+    } while (!validProof(newBlock));
+    // Validate before adding
+    if (!validateBlock(newBlock, chain.back())) {
+        logError("Invalid block mined, not adding to chain.");
+        return false;
+    }
     chain.push_back(newBlock);
+    adjustDifficulty();
     // Update balances
     for (const auto& tx : mempool) {
         balances[tx.sender] -= tx.amount;
@@ -102,6 +127,15 @@ bool Blockchain::mineBlock(const std::string& miner) {
     balances[miner] += 1.0; // mining reward
     mempool.clear();
     pendingContents.clear();
+    return true;
+}
+
+bool Blockchain::validateBlock(const Block& newBlock, const Block& prevBlock) const {
+    if (newBlock.prevHash != prevBlock.hash) return false;
+    if (newBlock.hash != calculateHash(newBlock)) return false;
+    if (!validProof(newBlock)) return false;
+    if (newBlock.timestamp < prevBlock.timestamp) return false;
+    // Optionally: validate all transactions and contents
     return true;
 }
 
@@ -157,4 +191,27 @@ std::map<std::string, double> Blockchain::getBalances() const {
 
 std::vector<Transaction> Blockchain::getMempool() const {
     return mempool;
+}
+
+// --- Peer-to-Peer Networking Stubs ---
+void Blockchain::connectToPeer(const std::string& peerAddress) {
+    // TODO: Implement peer connection logic (e.g., sockets, HTTP, etc.)
+    std::cout << "Connecting to peer: " << peerAddress << std::endl;
+}
+
+void Blockchain::broadcastBlock(const Block& block) {
+    // TODO: Implement block broadcasting to peers
+    std::cout << "Broadcasting block: " << block.index << std::endl;
+}
+
+void Blockchain::receiveBlock(const Block& block) {
+    // TODO: Implement block receiving and validation from peers
+    std::cout << "Received block: " << block.index << std::endl;
+    // Example: validate and add to chain if valid
+    if (validateBlock(block, chain.back())) {
+        chain.push_back(block);
+        adjustDifficulty();
+    } else {
+        logError("Received invalid block from peer.");
+    }
 }

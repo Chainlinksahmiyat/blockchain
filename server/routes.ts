@@ -5,6 +5,10 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { isAuthenticated } from "./replitAuth";
+import { validateFileType, scanFileForVirus } from './uploadUtils';
+import { authRateLimiter } from './rateLimiters';
+import { PostService } from './postService';
+import { StatsService } from './statsService';
 
 // Configure multer for file uploads
 const uploadDir = path.join(process.cwd(), 'uploads');
@@ -26,6 +30,27 @@ const upload = multer({
   storage: storage_multer,
   limits: {
     fileSize: 100 * 1024 * 1024 // 100MB limit
+  },
+  fileFilter: async (req, file, cb) => {
+    // Save file to temp location for validation
+    const tempPath = path.join(uploadDir, 'tmp-' + Date.now() + path.extname(file.originalname));
+    const out = fs.createWriteStream(tempPath);
+    file.stream.pipe(out);
+    out.on('finish', async () => {
+      const validType = await validateFileType(tempPath);
+      if (!validType) {
+        fs.unlinkSync(tempPath);
+        return cb(new Error('Invalid file type'));
+      }
+      const clean = await scanFileForVirus(tempPath).catch(() => false);
+      if (!clean) {
+        fs.unlinkSync(tempPath);
+        return cb(new Error('File failed virus scan'));
+      }
+      fs.unlinkSync(tempPath);
+      cb(null, true);
+    });
+    out.on('error', () => cb(new Error('File write error')));
   }
 });
 
@@ -34,7 +59,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/uploads', express.static(uploadDir));
 
   // Auth routes
-  app.get('/api/auth/user', async (req: any, res) => {
+  app.get('/api/auth/user', authRateLimiter, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       // Removed: const user = await storage.getUser(userId);
@@ -43,6 +68,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
+  });
+  app.get('/api/login', authRateLimiter, (req, res, next) => {
+    // ...existing code...
+  });
+  app.get('/api/callback', authRateLimiter, (req, res, next) => {
+    // ...existing code...
+  });
+  app.get('/api/logout', authRateLimiter, (req, res) => {
+    // ...existing code...
   });
 
   // Posts routes
@@ -66,33 +100,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
         imageUrl: req.file ? `/uploads/${req.file.filename}` : undefined,
       };
-
-      // Removed: const post = await storage.createPost(postData);
-      
-      // Calculate mining reward based on content type
-      let reward = 25; // Base reward
-      if (postData.postType === 'meme') reward = 45;
-      if (postData.postType === 'memory') reward = 67;
-      if (postData.postType === 'video') reward = 89;
-
-      // Call C++ blockchain core to add content and mine block
-      const { callBlockchainCore } = await import('./blockchain');
-      const contentType = postData.postType;
-      const filename = req.file ? req.file.filename : '';
-      const uploader = userId;
-      const hash = postData.id.toString(); // Use post ID as a simple hash (replace with real hash if needed)
-      const args = ['add-content', contentType, filename, uploader, hash];
-      let blockchainResult = '';
-      try {
-        blockchainResult = await callBlockchainCore(args);
-      } catch (err) {
-        console.error('Blockchain core error:', err);
-      }
-
-      // Award coins for post (optional, can be removed if blockchain core handles rewards)
-      // await storage.awardCoins(userId, reward, 'upload', 'Content upload reward', post.id);
-
-      res.json({ ...postData, coinsEarned: reward, blockchainResult });
+      const result = await PostService.createPost(postData, req.file, userId);
+      res.json(result);
     } catch (error) {
       console.error("Error creating post:", error);
       res.status(500).json({ message: "Failed to create post" });
@@ -103,15 +112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const postId = parseInt(req.params.id);
-      
-      const result = { liked: true }; // Placeholder, implement like toggle logic
-      // const result = await storage.toggleLike(userId, postId);
-      
-      if (result.liked) {
-        // Award 5 coins for liking
-        // await storage.awardCoins(userId, 5, 'like', 'Post like reward', postId);
-      }
-      
+      const result = await PostService.toggleLike(userId, postId);
       res.json(result);
     } catch (error) {
       console.error("Error toggling like:", error);
@@ -122,8 +123,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User stats routes
   app.get('/api/stats/blockchain', async (req: any, res) => {
     try {
-      const stats = {}; // Placeholder, implement stats fetching if needed
-      // const stats = await storage.getBlockchainStats();
+      const stats = await StatsService.getBlockchainStats();
       res.json(stats);
     } catch (error) {
       console.error("Error fetching blockchain stats:", error);
@@ -133,8 +133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/stats/top-miners', async (req: any, res) => {
     try {
-      const topMiners = {}; // Placeholder, implement top miners fetching if needed
-      // const topMiners = await storage.getTopMinersToday();
+      const topMiners = await StatsService.getTopMiners();
       res.json(topMiners);
     } catch (error) {
       console.error("Error fetching top miners:", error);
@@ -145,32 +144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/transactions', async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      // Call C++ blockchain core explorer to get all blocks and filter transactions for this user
-      const { callBlockchainCore } = await import('./blockchain');
-      let explorerOutput = '';
-      try {
-        explorerOutput = await callBlockchainCore(['explorer']);
-      } catch (err) {
-        console.error('Blockchain explorer error:', err);
-        return res.status(500).json({ message: 'Failed to fetch blockchain transactions' });
-      }
-      // Parse explorer output to extract transactions for this user
-      const userTransactions: any[] = [];
-      const lines = explorerOutput.split('\n');
-      for (const line of lines) {
-        if (line.trim().startsWith('TX:')) {
-          const parts = line.split('|');
-          if (parts.length >= 3) {
-            const [txInfo, amountStr, sigInfo] = parts;
-            const [_, sender, receiver] = txInfo.match(/TX: (.*) -> (.*)/) || [];
-            const amount = parseFloat(amountStr.trim());
-            const signature = sigInfo.replace('sig:', '').trim();
-            if (sender === userId || receiver === userId) {
-              userTransactions.push({ sender, receiver, amount, signature });
-            }
-          }
-        }
-      }
+      const userTransactions = await StatsService.getUserTransactions(userId);
       res.json(userTransactions);
     } catch (error) {
       console.error("Error fetching transactions:", error);

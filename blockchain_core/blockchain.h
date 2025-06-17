@@ -69,15 +69,27 @@ public:
     bool saveToFile(const std::string& filename) const;
     bool loadFromFile(const std::string& filename);
     std::vector<Transaction> getMempool() const;
+    // --- Peer-to-Peer Networking Stubs ---
+public:
+    // Connect to another peer (stub)
+    void connectToPeer(const std::string& peerAddress);
+    // Broadcast a block to peers (stub)
+    void broadcastBlock(const Block& block);
+    // Receive a block from a peer (stub)
+    void receiveBlock(const Block& block);
 private:
     std::vector<Block> chain;
     std::vector<Transaction> mempool;
     std::vector<Content> pendingContents;
     std::map<std::string, double> balances;
     int difficulty = 3;
+    int targetBlockTime = 30; // seconds
+    int adjustmentInterval = 5; // adjust every 5 blocks
     std::string calculateHash(const Block& block) const;
     void createGenesisBlock();
     bool validProof(const Block& block) const;
+    void adjustDifficulty();
+    bool validateBlock(const Block& newBlock, const Block& prevBlock) const;
 };
 
 #endif // BLOCKCHAIN_H
