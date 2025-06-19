@@ -6,3 +6,7 @@ add_executable(ahmiyat_blockchain main.cpp blockchain.cpp)
 # add OpenSSL for SHA256
 find_package(OpenSSL REQUIRED)
 target_link_libraries(ahmiyat_blockchain PRIVATE OpenSSL::Crypto)
+
+# add SQLite3 for database
+find_package(SQLite3 REQUIRED)
+target_link_libraries(ahmiyat_blockchain PRIVATE SQLite::SQLite3)

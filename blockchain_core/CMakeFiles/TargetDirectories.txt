@@ -1,0 +1,3 @@
+/workspaces/blockchain/blockchain_core/CMakeFiles/rebuild_cache.dir
+/workspaces/blockchain/blockchain_core/CMakeFiles/edit_cache.dir
+/workspaces/blockchain/blockchain_core/CMakeFiles/ahmiyat_blockchain.dir

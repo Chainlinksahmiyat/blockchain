@@ -7,19 +7,19 @@
 
 int main(int argc, char* argv[]) {
     Blockchain chain;
-    chain.loadFromFile("chain.txt");
+    chain.loadFromDb(); // Changed from loadFromFile
     if (argc > 1) {
         if (strcmp(argv[1], "add-tx") == 0 && argc == 6) {
             Transaction t = {argv[2], argv[3], std::stod(argv[4]), argv[5]};
             chain.addTransaction(t);
-            chain.saveToFile("chain.txt");
+            chain.saveToDb(); // Changed from saveToFile
             std::cout << "Transaction added\n";
             return 0;
         } else if (strcmp(argv[1], "add-content") == 0 && argc == 6) {
             Content c = {argv[2], argv[3], argv[4], argv[5], std::time(nullptr)};
             chain.addContent(c, argv[4]);
             chain.mineBlock(argv[4]);
-            chain.saveToFile("chain.txt");
+            chain.saveToDb(); // Changed from saveToFile
             std::cout << "Content added and block mined\n";
             return 0;
         } else if (strcmp(argv[1], "explorer") == 0) {
@@ -45,9 +45,9 @@ int main(int argc, char* argv[]) {
     // Validate chain
     std::cout << "Chain valid: " << (chain.isValidChain() ? "YES" : "NO") << std::endl;
     // Save/load demo
-    chain.saveToFile("chain.txt");
+    chain.saveToDb(); // Changed from saveToFile
     Blockchain loaded;
-    loaded.loadFromFile("chain.txt");
+    loaded.loadFromDb(); // Changed from loadFromFile
     std::cout << "Loaded chain blocks: " << loaded.getChain().size() << std::endl;
     return 0;
 }

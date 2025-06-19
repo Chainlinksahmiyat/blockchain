@@ -16,6 +16,7 @@
 #include <iomanip>
 #include <random>
 #include "ecdsa_utils.h"
+#include "sqlite3.h" // Add SQLite include
 
 struct Transaction {
     std::string sender; // address (hash of public key)
@@ -60,22 +61,20 @@ public:
 class Blockchain {
 public:
     Blockchain();
+    ~Blockchain();
     bool addTransaction(const Transaction& tx);
     bool addContent(const Content& content, const std::string& miner);
     bool mineBlock(const std::string& miner);
     std::vector<Block> getChain() const;
     std::map<std::string, double> getBalances() const;
     bool isValidChain() const;
-    bool saveToFile(const std::string& filename) const;
-    bool loadFromFile(const std::string& filename);
+    bool saveToDb();
+    bool loadFromDb();
     std::vector<Transaction> getMempool() const;
     // --- Peer-to-Peer Networking Stubs ---
 public:
-    // Connect to another peer (stub)
     void connectToPeer(const std::string& peerAddress);
-    // Broadcast a block to peers (stub)
     void broadcastBlock(const Block& block);
-    // Receive a block from a peer (stub)
     void receiveBlock(const Block& block);
 private:
     std::vector<Block> chain;
@@ -90,6 +89,8 @@ private:
     bool validProof(const Block& block) const;
     void adjustDifficulty();
     bool validateBlock(const Block& newBlock, const Block& prevBlock) const;
+    void logError(const std::string& message);
+    sqlite3* db = nullptr; // SQLite database handle
 };
 
 #endif // BLOCKCHAIN_H

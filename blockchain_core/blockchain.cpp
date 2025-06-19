@@ -4,6 +4,7 @@
 #include "blockchain.h"
 #include "ecdsa_utils.h"
 #include "storage.h"
+#include "sqlite3.h"
 #include <sstream>
 #include <iostream>
 #include <openssl/sha.h>
@@ -13,7 +14,15 @@
 #include <ctime>
 
 Blockchain::Blockchain() {
+    if (sqlite3_open("../ahmiyat.db", &db) != SQLITE_OK) {
+        std::cerr << "Failed to open database: " << sqlite3_errmsg(db) << std::endl;
+        db = nullptr;
+    }
     createGenesisBlock();
+}
+
+Blockchain::~Blockchain() {
+    if (db) sqlite3_close(db);
 }
 
 void Blockchain::createGenesisBlock() {
@@ -150,12 +159,46 @@ bool Blockchain::isValidChain() const {
     return true;
 }
 
-bool Blockchain::saveToFile(const std::string& filename) const {
-    return fileStorage.saveChain(chain, filename);
+bool Blockchain::saveToDb() {
+    if (!db) return false;
+    // Example: Save all blocks to a table 'blocks' (id, data as JSON/text)
+    char* errMsg = nullptr;
+    // Clear table first (for demo)
+    sqlite3_exec(db, "DELETE FROM blocks;", nullptr, nullptr, &errMsg);
+    for (const auto& block : chain) {
+        std::stringstream ss;
+        ss << block.index << '|' << block.prevHash << '|' << block.hash << '|' << block.timestamp << '|' << block.miner << '|' << block.nonce << '|' << block.difficulty;
+        std::string sql = "INSERT INTO blocks (id, data) VALUES (" + std::to_string(block.index) + ", '" + ss.str() + "');";
+        if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &errMsg) != SQLITE_OK) {
+            std::cerr << "DB insert error: " << errMsg << std::endl;
+            sqlite3_free(errMsg);
+            return false;
+        }
+    }
+    return true;
 }
 
-bool Blockchain::loadFromFile(const std::string& filename) {
-    return fileStorage.loadChain(chain, filename);
+bool Blockchain::loadFromDb() {
+    if (!db) return false;
+    chain.clear();
+    const char* sql = "SELECT data FROM blocks ORDER BY id ASC;";
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        std::cerr << "DB select error: " << sqlite3_errmsg(db) << std::endl;
+        return false;
+    }
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const unsigned char* data = sqlite3_column_text(stmt, 0);
+        if (data) {
+            std::istringstream iss(reinterpret_cast<const char*>(data));
+            Block block;
+            char sep;
+            iss >> block.index >> sep >> block.prevHash >> sep >> block.hash >> sep >> block.timestamp >> sep >> block.miner >> sep >> block.nonce >> sep >> block.difficulty;
+            chain.push_back(block);
+        }
+    }
+    sqlite3_finalize(stmt);
+    return true;
 }
 
 Wallet::Wallet() {
