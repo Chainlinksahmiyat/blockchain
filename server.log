@@ -4,3 +4,14 @@
 2025-06-20T04:05:48.650Z [ERROR] GET /api/auth/user 401 in 3ms :: {"message":"Not authenticated"}
 2025-06-20T04:05:54.748Z [INFO] GET /api/login 200 in 2ms
 2025-06-20T04:06:17.939Z [ERROR] GET /api/auth/user 401 in 0ms :: {"message":"Not authenticated"}
+2025-06-20T04:50:42.093Z [ERROR] GET /api/auth/user 401 in 2ms :: {"message":"Not authenticated"}
+2025-06-20T05:06:24.980Z [INFO] GET /api/login 200 in 5ms
+2025-06-20T05:09:40.885Z [INFO] GET /api/login 200 in 5ms
+2025-06-20T05:17:34.046Z [ERROR] GET /api/auth/user 401 in 3ms :: {"message":"Not authenticated"}
+2025-06-20T05:19:00.026Z [INFO] POST /api/wallet-login 200 in 1ms :: {"address":"0x123"}
+2025-06-20T05:19:03.083Z [ERROR] GET /api/auth/user 401 in 0ms :: {"message":"Not authenticated"}
+2025-06-20T05:19:16.767Z [INFO] POST /api/wallet-login 200 in 0ms :: {"address":"0x123"}
+2025-06-20T05:19:18.593Z [ERROR] GET /api/auth/user 401 in 0ms :: {"message":"Not authenticated"}
+2025-06-20T05:20:46.264Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T05:21:08.270Z [ERROR] GET /api/auth/user 401 in 0ms :: {"message":"Not authenticated"}
+2025-06-20T05:21:13.564Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}

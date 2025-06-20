@@ -8,12 +8,8 @@ export default function Landing() {
     // If already authenticated, redirect to dashboard
     fetch("/api/auth/user", { credentials: "include" })
       .then(res => res.ok ? res.json() : null)
-      .then(data => { if (data && data.userId) window.location.href = "/"; });
+      .then(data => { if (data && data.address) window.location.href = "/"; });
   }, []);
-
-  const handleLogin = () => {
-    window.location.href = "/api/login";
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-cyan-50">
@@ -102,8 +98,28 @@ export default function Landing() {
                 <Zap className="text-white text-xl" />
               </div>
               <h3 className="text-2xl font-bold mb-4">Sign In to Continue</h3>
-              <Button onClick={handleLogin} className="w-full bg-facebook-blue hover:bg-blue-600 text-white py-3 text-lg">
-                Sign In with Replit
+              <Button
+                onClick={async () => {
+                  // Example wallet login logic (replace with real wallet integration as needed)
+                  const address = prompt('Enter your wallet address:');
+                  const signature = prompt('Enter your wallet signature:');
+                  const message = 'Login to BlockSocial';
+                  if (!address || !signature) return;
+                  const res = await fetch('/api/wallet-login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ address, signature, message }),
+                  });
+                  if (res.ok) {
+                    window.location.href = "/";
+                  } else {
+                    alert('Wallet login failed.');
+                  }
+                }}
+                className="w-full bg-facebook-blue hover:bg-blue-600 text-white py-3 text-lg"
+              >
+                Sign In with Wallet
               </Button>
             </CardContent>
           </Card>
