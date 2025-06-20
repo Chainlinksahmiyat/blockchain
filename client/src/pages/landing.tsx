@@ -112,6 +112,7 @@ export default function Landing() {
                     body: JSON.stringify({ address, signature, message }),
                   });
                   if (res.ok) {
+                    localStorage.setItem('wallet', address); // Set wallet in localStorage for router
                     window.location.href = "/";
                   } else {
                     alert('Wallet login failed.');

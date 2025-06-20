@@ -15,3 +15,17 @@
 2025-06-20T05:20:46.264Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}
 2025-06-20T05:21:08.270Z [ERROR] GET /api/auth/user 401 in 0ms :: {"message":"Not authenticated"}
 2025-06-20T05:21:13.564Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T05:21:35.549Z [INFO] POST /api/wallet-login 200 in 1ms :: {"address":"0x123"}
+2025-06-20T05:21:37.109Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T05:22:57.191Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T05:23:10.491Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T05:23:23.341Z [INFO] POST /api/wallet-login 200 in 1ms :: {"address":"0x123"}
+2025-06-20T05:23:25.534Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T05:23:25.545Z [ERROR] GET /api/posts 500 in 8ms :: {"message":"Failed to fetch posts"}
+2025-06-20T05:23:25.718Z [INFO] GET /api/stats/top-miners 200 in 1ms :: {}
+2025-06-20T05:23:25.722Z [INFO] GET /api/stats/blockchain 200 in 1ms :: {}
+2025-06-20T05:23:25.726Z [ERROR] GET /api/transactions 500 in 2ms :: {"message":"Failed to fetch transactions"}
+2025-06-20T05:24:02.051Z [ERROR] POST /api/posts 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T05:25:35.960Z [ERROR] POST /api/posts 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T05:26:20.042Z [INFO] GET /api/blockchain/info 200 in 33ms :: {"explorer":"Block 0: aa853a69373083336…
+2025-06-20T05:26:25.019Z [ERROR] POST /api/blockchain/mine 500 in 3ms :: {"message":"Failed to mine block"}
