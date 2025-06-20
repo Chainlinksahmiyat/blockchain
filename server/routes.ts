@@ -4,7 +4,6 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { isAuthenticated } from "./replitAuth";
 import { validateFileType, scanFileForVirus } from './uploadUtils';
 import { authRateLimiter } from './rateLimiters';
 import { PostService } from './postService';
@@ -55,29 +54,51 @@ const upload = multer({
   }
 });
 
+// In-memory session for demo (replace with DB/session store for production)
+const walletSessions = new Map();
+
+// Wallet login endpoint
+// User sends { address, signature, message }
+function verifySignature(address: string, signature: string, message: string): boolean {
+  // TODO: Implement real signature verification (e.g., ECDSA/secp256k1)
+  // For demo, accept any non-empty values
+  return !!address && !!signature && !!message;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Serve uploaded files
   app.use('/uploads', express.static(uploadDir));
 
-  // Auth routes
-  app.get('/api/auth/user', authRateLimiter, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      // Removed: const user = await storage.getUser(userId);
-      res.json({ userId }); // Simplified response, adjust as needed
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
+  // Wallet login route
+  app.post('/api/wallet-login', express.json(), (req, res) => {
+    const { address, signature, message } = req.body;
+    if (!verifySignature(address, signature, message)) {
+      return res.status(401).json({ message: 'Invalid wallet signature' });
     }
+    // Create session (in-memory for demo)
+    const sessionId = Math.random().toString(36).slice(2);
+    walletSessions.set(sessionId, { address });
+    res.cookie('walletSession', sessionId, { httpOnly: true, sameSite: 'lax' });
+    res.json({ address });
   });
-  app.get('/api/login', authRateLimiter, (req, res, next) => {
-    // ...existing code...
-  });
-  app.get('/api/callback', authRateLimiter, (req, res, next) => {
-    // ...existing code...
-  });
-  app.get('/api/logout', authRateLimiter, (req, res) => {
-    // ...existing code...
+
+  // Auth middleware (replace isAuthenticated)
+  function walletAuth(req, res, next) {
+    const sessionId = req.cookies?.walletSession;
+    if (sessionId && walletSessions.has(sessionId)) {
+      req.user = { address: walletSessions.get(sessionId).address };
+      return next();
+    }
+    res.status(401).json({ message: 'Not authenticated' });
+  }
+
+  // Replace /api/auth/user
+  app.get('/api/auth/user', (req: any, res) => {
+    const sessionId = req.cookies?.walletSession;
+    if (sessionId && walletSessions.has(sessionId)) {
+      return res.json({ address: walletSessions.get(sessionId).address });
+    }
+    res.status(401).json({ message: 'Not authenticated' });
   });
 
   // Posts routes
@@ -93,9 +114,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/posts', isAuthenticated, upload.single('file'), async (req: any, res) => {
+  app.post('/api/posts', walletAuth, upload.single('file'), async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.address;
       let imageUrl;
       if (req.file) {
         // Upload to S3 and get public URL

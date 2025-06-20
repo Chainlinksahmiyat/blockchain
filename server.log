@@ -1,0 +1,6 @@
+2025-06-20T03:56:29.325Z [ERROR] GET /api/auth/user 500 in 6ms :: {"message":"Failed to fetch user"}
+2025-06-20T04:01:34.885Z [ERROR] GET /api/auth/user 500 in 1ms :: {"message":"Failed to fetch user"}
+2025-06-20T04:02:49.187Z [ERROR] GET /api/auth/user 500 in 1ms :: {"message":"Failed to fetch user"}
+2025-06-20T04:05:48.650Z [ERROR] GET /api/auth/user 401 in 3ms :: {"message":"Not authenticated"}
+2025-06-20T04:05:54.748Z [INFO] GET /api/login 200 in 2ms
+2025-06-20T04:06:17.939Z [ERROR] GET /api/auth/user 401 in 0ms :: {"message":"Not authenticated"}

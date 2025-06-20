@@ -47,56 +47,6 @@ import multer from "multer";
 import path2 from "path";
 import fs2 from "fs";
 
-// server/replitAuth.ts
-import * as client from "openid-client";
-import { Strategy } from "openid-client/passport";
-import passport from "passport";
-import session from "express-session";
-import memoize from "memoizee";
-import connectPg from "connect-pg-simple";
-if (!process.env.REPLIT_DOMAINS) {
-  throw new Error("Environment variable REPLIT_DOMAINS not provided");
-}
-var getOidcConfig = memoize(
-  async () => {
-    return await client.discovery(
-      new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
-      process.env.REPL_ID
-    );
-  },
-  { maxAge: 3600 * 1e3 }
-);
-function updateUserSession(user, tokens) {
-  user.claims = tokens.claims();
-  user.access_token = tokens.access_token;
-  user.refresh_token = tokens.refresh_token;
-  user.expires_at = user.claims?.exp;
-}
-var isAuthenticated = async (req, res, next) => {
-  const user = req.user;
-  if (!req.isAuthenticated() || !user.expires_at) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-  const now = Math.floor(Date.now() / 1e3);
-  if (now <= user.expires_at) {
-    return next();
-  }
-  const refreshToken = user.refresh_token;
-  if (!refreshToken) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-  try {
-    const config = await getOidcConfig();
-    const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
-    updateUserSession(user, tokenResponse);
-    return next();
-  } catch (error) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-};
-
 // server/uploadUtils.ts
 import { FileTypeParser } from "file-type";
 import { exec } from "child_process";
@@ -123,19 +73,6 @@ function scanFileForVirus(filePath) {
     });
   });
 }
-
-// server/rateLimiters.ts
-import rateLimit from "express-rate-limit";
-var authRateLimiter = rateLimit({
-  windowMs: 60 * 1e3,
-  // 1 minute
-  max: 5,
-  message: {
-    message: "Too many authentication attempts. Please try again later."
-  },
-  standardHeaders: true,
-  legacyHeaders: false
-});
 
 // server/postService.ts
 init_blockchain();
@@ -256,22 +193,36 @@ var upload = multer({
     out.on("error", () => cb(new Error("File write error")));
   }
 });
+var walletSessions = /* @__PURE__ */ new Map();
+function verifySignature(address, signature, message) {
+  return !!address && !!signature && !!message;
+}
 async function registerRoutes(app2) {
   app2.use("/uploads", express.static(uploadDir));
-  app2.get("/api/auth/user", authRateLimiter, async (req, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      res.json({ userId });
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
+  app2.post("/api/wallet-login", express.json(), (req, res) => {
+    const { address, signature, message } = req.body;
+    if (!verifySignature(address, signature, message)) {
+      return res.status(401).json({ message: "Invalid wallet signature" });
     }
+    const sessionId = Math.random().toString(36).slice(2);
+    walletSessions.set(sessionId, { address });
+    res.cookie("walletSession", sessionId, { httpOnly: true, sameSite: "lax" });
+    res.json({ address });
   });
-  app2.get("/api/login", authRateLimiter, (req, res, next) => {
-  });
-  app2.get("/api/callback", authRateLimiter, (req, res, next) => {
-  });
-  app2.get("/api/logout", authRateLimiter, (req, res) => {
+  function walletAuth(req, res, next) {
+    const sessionId = req.cookies?.walletSession;
+    if (sessionId && walletSessions.has(sessionId)) {
+      req.user = { address: walletSessions.get(sessionId).address };
+      return next();
+    }
+    res.status(401).json({ message: "Not authenticated" });
+  }
+  app2.get("/api/auth/user", (req, res) => {
+    const sessionId = req.cookies?.walletSession;
+    if (sessionId && walletSessions.has(sessionId)) {
+      return res.json({ address: walletSessions.get(sessionId).address });
+    }
+    res.status(401).json({ message: "Not authenticated" });
   });
   app2.get("/api/posts", async (req, res) => {
     try {
@@ -283,9 +234,9 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch posts" });
     }
   });
-  app2.post("/api/posts", isAuthenticated, upload.single("file"), async (req, res) => {
+  app2.post("/api/posts", walletAuth, upload.single("file"), async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.address;
       let imageUrl;
       if (req.file) {
         const s3Key = `uploads/${Date.now()}-${req.file.filename}`;
