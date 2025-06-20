@@ -71,3 +71,12 @@
 2025-06-20T06:10:29.803Z [INFO] GET /api/stats/top-miners 304 in 1ms :: {}
 2025-06-20T06:10:29.806Z [ERROR] GET /api/transactions 500 in 2ms :: {"message":"Failed to fetch transactions"}
 2025-06-20T06:10:53.295Z [ERROR] POST /api/posts 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T06:23:44.991Z [ERROR] GET /api/auth/user 401 in 0ms :: {"message":"Not authenticated"}
+2025-06-20T06:25:22.463Z [INFO] POST /api/wallet-login 200 in 0ms :: {"address":"0x123"}
+2025-06-20T06:25:26.802Z [INFO] POST /api/wallet-login 200 in 1ms :: {"address":"0x123"}
+2025-06-20T06:25:28.643Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T06:25:28.645Z [ERROR] GET /api/posts 500 in 1ms :: {"message":"Failed to fetch posts"}
+2025-06-20T06:25:29.013Z [INFO] GET /api/stats/top-miners 200 in 1ms :: {}
+2025-06-20T06:25:29.018Z [INFO] GET /api/stats/blockchain 200 in 0ms :: {}
+2025-06-20T06:25:29.026Z [ERROR] GET /api/transactions 500 in 3ms :: {"message":"Failed to fetch transactions"}
+2025-06-20T06:25:44.821Z [ERROR] POST /api/posts 401 in 0ms :: {"message":"Not authenticated"}
