@@ -14,9 +14,17 @@
 #include <ctime>
 
 Blockchain::Blockchain() {
-    if (sqlite3_open("../ahmiyat.db", &db) != SQLITE_OK) {
+    if (sqlite3_open("ahmiyat.db", &db) != SQLITE_OK) {
         std::cerr << "Failed to open database: " << sqlite3_errmsg(db) << std::endl;
         db = nullptr;
+    } else {
+        // Ensure blocks table exists
+        const char* createTableSQL = "CREATE TABLE IF NOT EXISTS blocks (id INTEGER PRIMARY KEY, data TEXT);";
+        char* errMsg = nullptr;
+        if (sqlite3_exec(db, createTableSQL, nullptr, nullptr, &errMsg) != SQLITE_OK) {
+            std::cerr << "Failed to create blocks table: " << errMsg << std::endl;
+            sqlite3_free(errMsg);
+        }
     }
     createGenesisBlock();
 }
@@ -129,11 +137,13 @@ bool Blockchain::mineBlock(const std::string& miner) {
     chain.push_back(newBlock);
     adjustDifficulty();
     // Update balances
+    double reward = 1.0 / std::max(1, difficulty);
+    if (reward < 0.0001) reward = 0.0001;
     for (const auto& tx : mempool) {
         balances[tx.sender] -= tx.amount;
         balances[tx.receiver] += tx.amount;
     }
-    balances[miner] += 1.0; // mining reward
+    balances[miner] += reward; // mining reward based on difficulty
     mempool.clear();
     pendingContents.clear();
     return true;

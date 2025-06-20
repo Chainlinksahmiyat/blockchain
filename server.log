@@ -29,3 +29,45 @@
 2025-06-20T05:25:35.960Z [ERROR] POST /api/posts 401 in 1ms :: {"message":"Not authenticated"}
 2025-06-20T05:26:20.042Z [INFO] GET /api/blockchain/info 200 in 33ms :: {"explorer":"Block 0: aa853a69373083336…
 2025-06-20T05:26:25.019Z [ERROR] POST /api/blockchain/mine 500 in 3ms :: {"message":"Failed to mine block"}
+2025-06-20T05:32:02.010Z [INFO] GET /api/blockchain/info 200 in 16ms :: {"explorer":"Block 0: 0d4c8cc0438cc7b5a…
+2025-06-20T05:32:04.891Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T05:32:04.899Z [ERROR] GET /api/posts 500 in 2ms :: {"message":"Failed to fetch posts"}
+2025-06-20T05:32:05.037Z [INFO] GET /api/stats/blockchain 304 in 0ms :: {}
+2025-06-20T05:32:05.049Z [ERROR] GET /api/transactions 500 in 2ms :: {"message":"Failed to fetch transactions"}
+2025-06-20T05:32:05.062Z [INFO] GET /api/stats/top-miners 304 in 1ms :: {}
+2025-06-20T05:32:37.157Z [ERROR] POST /api/posts 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T05:37:38.261Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T05:37:38.269Z [ERROR] GET /api/posts 500 in 2ms :: {"message":"Failed to fetch posts"}
+2025-06-20T05:37:38.429Z [INFO] GET /api/stats/blockchain 304 in 1ms :: {}
+2025-06-20T05:37:38.442Z [ERROR] GET /api/transactions 500 in 2ms :: {"message":"Failed to fetch transactions"}
+2025-06-20T05:37:38.455Z [INFO] GET /api/stats/top-miners 304 in 1ms :: {}
+2025-06-20T05:37:51.275Z [ERROR] POST /api/posts 401 in 0ms :: {"message":"Not authenticated"}
+2025-06-20T05:39:12.400Z [ERROR] GET /api/posts 500 in 3ms :: {"message":"Failed to fetch posts"}
+2025-06-20T05:39:12.408Z [ERROR] GET /api/auth/user 401 in 2ms :: {"message":"Not authenticated"}
+2025-06-20T05:39:12.595Z [INFO] GET /api/stats/blockchain 304 in 0ms :: {}
+2025-06-20T05:39:13.156Z [INFO] GET /api/stats/top-miners 304 in 2ms :: {}
+2025-06-20T05:39:13.161Z [ERROR] GET /api/transactions 500 in 4ms :: {"message":"Failed to fetch transactions"}
+2025-06-20T05:39:26.463Z [ERROR] POST /api/posts 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T05:58:10.620Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T05:58:10.622Z [ERROR] GET /api/posts 500 in 2ms :: {"message":"Failed to fetch posts"}
+2025-06-20T05:58:15.543Z [INFO] GET /api/stats/top-miners 304 in 0ms :: {}
+2025-06-20T05:58:15.556Z [INFO] GET /api/stats/blockchain 304 in 0ms :: {}
+2025-06-20T05:58:15.563Z [ERROR] GET /api/transactions 500 in 4ms :: {"message":"Failed to fetch transactions"}
+2025-06-20T06:00:26.565Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T06:00:26.576Z [ERROR] GET /api/posts 500 in 4ms :: {"message":"Failed to fetch posts"}
+2025-06-20T06:00:26.794Z [INFO] GET /api/stats/blockchain 304 in 1ms :: {}
+2025-06-20T06:00:26.810Z [INFO] GET /api/stats/top-miners 304 in 1ms :: {}
+2025-06-20T06:00:26.817Z [ERROR] GET /api/transactions 500 in 2ms :: {"message":"Failed to fetch transactions"}
+2025-06-20T06:00:47.986Z [ERROR] POST /api/posts 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T06:04:58.152Z [ERROR] GET /api/auth/user 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T06:04:58.170Z [ERROR] GET /api/posts 500 in 2ms :: {"message":"Failed to fetch posts"}
+2025-06-20T06:04:58.336Z [INFO] GET /api/stats/blockchain 304 in 0ms :: {}
+2025-06-20T06:04:58.343Z [INFO] GET /api/stats/top-miners 304 in 0ms :: {}
+2025-06-20T06:04:58.356Z [ERROR] GET /api/transactions 500 in 4ms :: {"message":"Failed to fetch transactions"}
+2025-06-20T06:05:21.265Z [ERROR] POST /api/posts 401 in 1ms :: {"message":"Not authenticated"}
+2025-06-20T06:10:29.597Z [ERROR] GET /api/posts 500 in 4ms :: {"message":"Failed to fetch posts"}
+2025-06-20T06:10:29.600Z [ERROR] GET /api/auth/user 401 in 2ms :: {"message":"Not authenticated"}
+2025-06-20T06:10:29.778Z [INFO] GET /api/stats/blockchain 304 in 1ms :: {}
+2025-06-20T06:10:29.803Z [INFO] GET /api/stats/top-miners 304 in 1ms :: {}
+2025-06-20T06:10:29.806Z [ERROR] GET /api/transactions 500 in 2ms :: {"message":"Failed to fetch transactions"}
+2025-06-20T06:10:53.295Z [ERROR] POST /api/posts 401 in 1ms :: {"message":"Not authenticated"}

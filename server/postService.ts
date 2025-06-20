@@ -3,12 +3,6 @@ import { callBlockchainCore } from './blockchain';
 
 export class PostService {
   static async createPost(postData: any, file: any, userId: string) {
-    // Calculate mining reward based on content type
-    let reward = 25; // Base reward
-    if (postData.postType === 'meme') reward = 45;
-    if (postData.postType === 'memory') reward = 67;
-    if (postData.postType === 'video') reward = 89;
-
     // Call C++ blockchain core to add content and mine block
     const contentType = postData.postType;
     const filename = file ? file.filename : '';
@@ -16,8 +10,13 @@ export class PostService {
     const hash = postData.id ? postData.id.toString() : Date.now().toString();
     const args = ['add-content', contentType, filename, uploader, hash];
     let blockchainResult = '';
+    let reward = 0.0001;
     try {
       blockchainResult = await callBlockchainCore(args);
+      // Try to parse reward from blockchainResult if possible
+      // Example: if blockchainResult contains 'Reward: 0.5', extract it
+      const match = blockchainResult.match(/Reward:\s*([0-9.]+)/);
+      if (match) reward = parseFloat(match[1]);
     } catch (err) {
       throw new Error('Blockchain core error: ' + err);
     }
