@@ -7,6 +7,9 @@ CMakeFiles/ahmiyat_blockchain.dir/blockchain.cpp.o
  /workspaces/blockchain/blockchain_core/ecdsa_utils.h
  /workspaces/blockchain/blockchain_core/sqlite3.h
  /workspaces/blockchain/blockchain_core/storage.h
+CMakeFiles/ahmiyat_blockchain.dir/ecdsa_utils.cpp.o
+ /workspaces/blockchain/blockchain_core/ecdsa_utils.cpp
+ /workspaces/blockchain/blockchain_core/ecdsa_utils.h
 CMakeFiles/ahmiyat_blockchain.dir/main.cpp.o
  /workspaces/blockchain/blockchain_core/blockchain.h
  /workspaces/blockchain/blockchain_core/ecdsa_utils.h

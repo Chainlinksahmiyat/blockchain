@@ -5,6 +5,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
   "/workspaces/blockchain/blockchain_core/blockchain.cpp" "/workspaces/blockchain/blockchain_core/CMakeFiles/ahmiyat_blockchain.dir/blockchain.cpp.o"
+  "/workspaces/blockchain/blockchain_core/ecdsa_utils.cpp" "/workspaces/blockchain/blockchain_core/CMakeFiles/ahmiyat_blockchain.dir/ecdsa_utils.cpp.o"
   "/workspaces/blockchain/blockchain_core/main.cpp" "/workspaces/blockchain/blockchain_core/CMakeFiles/ahmiyat_blockchain.dir/main.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")

@@ -150,6 +150,33 @@ blockchain.cpp.s:
 	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/blockchain.cpp.s
 .PHONY : blockchain.cpp.s
 
+ecdsa_utils.o: ecdsa_utils.cpp.o
+
+.PHONY : ecdsa_utils.o
+
+# target to build an object file
+ecdsa_utils.cpp.o:
+	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/ecdsa_utils.cpp.o
+.PHONY : ecdsa_utils.cpp.o
+
+ecdsa_utils.i: ecdsa_utils.cpp.i
+
+.PHONY : ecdsa_utils.i
+
+# target to preprocess a source file
+ecdsa_utils.cpp.i:
+	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/ecdsa_utils.cpp.i
+.PHONY : ecdsa_utils.cpp.i
+
+ecdsa_utils.s: ecdsa_utils.cpp.s
+
+.PHONY : ecdsa_utils.s
+
+# target to generate assembly for a file
+ecdsa_utils.cpp.s:
+	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/ecdsa_utils.cpp.s
+.PHONY : ecdsa_utils.cpp.s
+
 main.o: main.cpp.o
 
 .PHONY : main.o
@@ -189,6 +216,9 @@ help:
 	@echo "... blockchain.o"
 	@echo "... blockchain.i"
 	@echo "... blockchain.s"
+	@echo "... ecdsa_utils.o"
+	@echo "... ecdsa_utils.i"
+	@echo "... ecdsa_utils.s"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"

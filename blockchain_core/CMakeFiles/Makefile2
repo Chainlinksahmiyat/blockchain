@@ -74,12 +74,12 @@ clean: CMakeFiles/ahmiyat_blockchain.dir/clean
 CMakeFiles/ahmiyat_blockchain.dir/all:
 	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/depend
 	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/workspaces/blockchain/blockchain_core/CMakeFiles --progress-num=1,2,3 "Built target ahmiyat_blockchain"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/workspaces/blockchain/blockchain_core/CMakeFiles --progress-num=1,2,3,4 "Built target ahmiyat_blockchain"
 .PHONY : CMakeFiles/ahmiyat_blockchain.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/ahmiyat_blockchain.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /workspaces/blockchain/blockchain_core/CMakeFiles 3
+	$(CMAKE_COMMAND) -E cmake_progress_start /workspaces/blockchain/blockchain_core/CMakeFiles 4
 	$(MAKE) -f CMakeFiles/Makefile2 CMakeFiles/ahmiyat_blockchain.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /workspaces/blockchain/blockchain_core/CMakeFiles 0
 .PHONY : CMakeFiles/ahmiyat_blockchain.dir/rule

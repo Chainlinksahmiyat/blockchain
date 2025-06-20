@@ -3,6 +3,8 @@
 #include <openssl/evp.h>
 #include <openssl/buffer.h>
 #include <vector>
+#include <sstream>
+#include <iomanip>
 
 bool ECDSAUtils::generateKeyPair(std::string& outPrivateKeyPem, std::string& outPublicKeyPem) {
     EC_KEY* ecKey = EC_KEY_new_by_curve_name(NID_secp256k1);
