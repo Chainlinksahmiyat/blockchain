@@ -1,5 +1,5 @@
 // File type validation and virus scanning utilities for uploads
-import fileType from 'file-type';
+import { FileTypeParser } from 'file-type';
 import { exec } from 'child_process';
 import fs from 'fs';
 
@@ -11,7 +11,8 @@ export const allowedMimeTypes = [
 
 // Validate file type by reading magic bytes
 export async function validateFileType(filePath: string): Promise<boolean> {
-  const type = await fileType.fromFile(filePath);
+  const parser = new FileTypeParser();
+  const type = await parser.fromFile(filePath);
   return type ? allowedMimeTypes.includes(type.mime) : false;
 }
 
