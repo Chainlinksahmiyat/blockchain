@@ -13,6 +13,7 @@
 #include <random>
 #include <ctime>
 #include "base58.h"
+#include <nlohmann/json.hpp>
 
 Blockchain::Blockchain() {
     if (sqlite3_open("ahmiyat.db", &db) != SQLITE_OK) {
@@ -241,14 +242,39 @@ bool Blockchain::isValidChain() const {
 
 bool Blockchain::saveToDb() {
     if (!db) return false;
-    // Example: Save all blocks to a table 'blocks' (id, data as JSON/text)
     char* errMsg = nullptr;
-    // Clear table first (for demo)
     sqlite3_exec(db, "DELETE FROM blocks;", nullptr, nullptr, &errMsg);
     for (const auto& block : chain) {
-        std::stringstream ss;
-        ss << block.index << '|' << block.prevHash << '|' << block.hash << '|' << block.timestamp << '|' << block.miner << '|' << block.nonce << '|' << block.difficulty;
-        std::string sql = "INSERT INTO blocks (id, data) VALUES (" + std::to_string(block.index) + ", '" + ss.str() + "');";
+        nlohmann::json jblock;
+        jblock["index"] = block.index;
+        jblock["prevHash"] = block.prevHash;
+        jblock["hash"] = block.hash;
+        jblock["timestamp"] = block.timestamp;
+        jblock["miner"] = block.miner;
+        jblock["nonce"] = block.nonce;
+        jblock["difficulty"] = block.difficulty;
+        // Transactions
+        for (const auto& tx : block.transactions) {
+            nlohmann::json jtx;
+            jtx["sender"] = tx.sender;
+            jtx["receiver"] = tx.receiver;
+            jtx["amount"] = tx.amount;
+            jtx["signature"] = tx.signature;
+            jtx["publicKeyPem"] = tx.publicKeyPem;
+            jblock["transactions"].push_back(jtx);
+        }
+        // Contents
+        for (const auto& c : block.contents) {
+            nlohmann::json jc;
+            jc["type"] = c.type;
+            jc["filename"] = c.filename;
+            jc["uploader"] = c.uploader;
+            jc["hash"] = c.hash;
+            jc["timestamp"] = c.timestamp;
+            jc["publicKeyPem"] = c.publicKeyPem;
+            jblock["contents"].push_back(jc);
+        }
+        std::string sql = "INSERT INTO blocks (id, data) VALUES (" + std::to_string(block.index) + ", '" + jblock.dump() + "');";
         if (sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &errMsg) != SQLITE_OK) {
             std::cerr << "DB insert error: " << errMsg << std::endl;
             sqlite3_free(errMsg);
@@ -270,10 +296,36 @@ bool Blockchain::loadFromDb() {
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         const unsigned char* data = sqlite3_column_text(stmt, 0);
         if (data) {
-            std::istringstream iss(reinterpret_cast<const char*>(data));
+            nlohmann::json jblock = nlohmann::json::parse(reinterpret_cast<const char*>(data));
             Block block;
-            char sep;
-            iss >> block.index >> sep >> block.prevHash >> sep >> block.hash >> sep >> block.timestamp >> sep >> block.miner >> sep >> block.nonce >> sep >> block.difficulty;
+            block.index = jblock["index"];
+            block.prevHash = jblock["prevHash"];
+            block.hash = jblock["hash"];
+            block.timestamp = jblock["timestamp"];
+            block.miner = jblock["miner"];
+            block.nonce = jblock["nonce"];
+            block.difficulty = jblock["difficulty"];
+            // Transactions
+            for (const auto& jtx : jblock["transactions"]) {
+                Transaction tx;
+                tx.sender = jtx["sender"];
+                tx.receiver = jtx["receiver"];
+                tx.amount = jtx["amount"];
+                tx.signature = jtx["signature"];
+                tx.publicKeyPem = jtx["publicKeyPem"];
+                block.transactions.push_back(tx);
+            }
+            // Contents
+            for (const auto& jc : jblock["contents"]) {
+                Content c;
+                c.type = jc["type"];
+                c.filename = jc["filename"];
+                c.uploader = jc["uploader"];
+                c.hash = jc["hash"];
+                c.timestamp = jc["timestamp"];
+                c.publicKeyPem = jc["publicKeyPem"];
+                block.contents.push_back(c);
+            }
             chain.push_back(block);
         }
     }

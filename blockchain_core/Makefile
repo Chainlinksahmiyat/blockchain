@@ -123,6 +123,33 @@ ahmiyat_blockchain/fast:
 	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/build
 .PHONY : ahmiyat_blockchain/fast
 
+base58.o: base58.cpp.o
+
+.PHONY : base58.o
+
+# target to build an object file
+base58.cpp.o:
+	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/base58.cpp.o
+.PHONY : base58.cpp.o
+
+base58.i: base58.cpp.i
+
+.PHONY : base58.i
+
+# target to preprocess a source file
+base58.cpp.i:
+	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/base58.cpp.i
+.PHONY : base58.cpp.i
+
+base58.s: base58.cpp.s
+
+.PHONY : base58.s
+
+# target to generate assembly for a file
+base58.cpp.s:
+	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/base58.cpp.s
+.PHONY : base58.cpp.s
+
 blockchain.o: blockchain.cpp.o
 
 .PHONY : blockchain.o
@@ -204,6 +231,33 @@ main.cpp.s:
 	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/main.cpp.s
 .PHONY : main.cpp.s
 
+storage.o: storage.cpp.o
+
+.PHONY : storage.o
+
+# target to build an object file
+storage.cpp.o:
+	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/storage.cpp.o
+.PHONY : storage.cpp.o
+
+storage.i: storage.cpp.i
+
+.PHONY : storage.i
+
+# target to preprocess a source file
+storage.cpp.i:
+	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/storage.cpp.i
+.PHONY : storage.cpp.i
+
+storage.s: storage.cpp.s
+
+.PHONY : storage.s
+
+# target to generate assembly for a file
+storage.cpp.s:
+	$(MAKE) -f CMakeFiles/ahmiyat_blockchain.dir/build.make CMakeFiles/ahmiyat_blockchain.dir/storage.cpp.s
+.PHONY : storage.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -213,6 +267,9 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... edit_cache"
 	@echo "... ahmiyat_blockchain"
+	@echo "... base58.o"
+	@echo "... base58.i"
+	@echo "... base58.s"
 	@echo "... blockchain.o"
 	@echo "... blockchain.i"
 	@echo "... blockchain.s"
@@ -222,6 +279,9 @@ help:
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
+	@echo "... storage.o"
+	@echo "... storage.i"
+	@echo "... storage.s"
 .PHONY : help
 
 
