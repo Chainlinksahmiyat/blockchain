@@ -11,6 +11,7 @@ target_link_libraries(ahmiyat_blockchain PRIVATE OpenSSL::Crypto)
 find_package(SQLite3 REQUIRED)
 target_link_libraries(ahmiyat_blockchain PRIVATE SQLite::SQLite3)
 
+target_link_libraries(ahmiyat_blockchain PRIVATE pthread)
 # add nlohmann_json for JSON serialization
 find_package(nlohmann_json 3.2.0 REQUIRED)
 target_link_libraries(ahmiyat_blockchain PRIVATE nlohmann_json::nlohmann_json)
