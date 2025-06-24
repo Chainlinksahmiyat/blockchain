@@ -127,6 +127,18 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[1], "get-halving") == 0) {
             std::cout << "Current halving interval: " << chain.getHalvingInterval() << std::endl;
             return 0;
+        } else if (strcmp(argv[1], "p2p-server") == 0 && argc == 3) {
+            int port = std::stoi(argv[2]);
+            chain.startP2PServer(port);
+            std::cout << "Press Enter to stop server..." << std::endl;
+            std::cin.get();
+            chain.stopP2PServer();
+            return 0;
+        } else if (strcmp(argv[1], "p2p-connect") == 0 && argc == 4) {
+            std::string host = argv[2];
+            int port = std::stoi(argv[3]);
+            chain.connectToPeerTCP(host, port);
+            return 0;
         }
     }
     // Print balances

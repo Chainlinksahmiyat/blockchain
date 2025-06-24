@@ -1350,18 +1350,6 @@ openssl/symhacks.h
 openssl/cryptoerr_legacy.h
 -
 
-/workspaces/blockchain/blockchain_core/base58.cpp
-base58.h
-/workspaces/blockchain/blockchain_core/base58.h
-openssl/sha.h
--
-vector
--
-string
--
-cstdint
--
-
 /workspaces/blockchain/blockchain_core/base58.h
 string
 -
@@ -1397,6 +1385,18 @@ base58.h
 /workspaces/blockchain/blockchain_core/base58.h
 nlohmann/json.hpp
 -
+vector
+-
+string
+-
+sys/socket.h
+-
+netinet/in.h
+-
+arpa/inet.h
+-
+unistd.h
+-
 
 /workspaces/blockchain/blockchain_core/blockchain.h
 string
@@ -1422,6 +1422,10 @@ sqlite3.h
 base58.h
 /workspaces/blockchain/blockchain_core/base58.h
 set
+-
+thread
+-
+atomic
 -
 
 /workspaces/blockchain/blockchain_core/ecdsa_utils.h
@@ -1451,10 +1455,6 @@ fstream
 /workspaces/blockchain/blockchain_core/sqlite3.h
 sqlite3.h
 -
-
-/workspaces/blockchain/blockchain_core/storage.cpp
-storage.h
-/workspaces/blockchain/blockchain_core/storage.h
 
 /workspaces/blockchain/blockchain_core/storage.h
 string

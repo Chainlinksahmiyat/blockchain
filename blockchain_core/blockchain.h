@@ -19,6 +19,8 @@
 #include "sqlite3.h" // Add SQLite include
 #include "base58.h"
 #include <set>
+#include <thread>
+#include <atomic>
 
 struct Transaction {
     std::string sender; // address (hash of public key)
@@ -43,6 +45,7 @@ struct Block {
     std::vector<Content> contents;
     std::string prevHash;
     std::string hash;
+    std::string merkleRoot;
     std::time_t timestamp;
     std::string miner;
     int nonce;
@@ -93,6 +96,7 @@ public:
     int getHalvingInterval() const;
     double getBlockReward(int blockIndex) const;
     std::map<std::string, double> getDelegatedStakes() const;
+    std::string calculateMerkleRoot(const std::vector<Transaction>& transactions) const;
     // --- Peer-to-Peer Networking Stubs ---
 public:
     void connectToPeer(const std::string& peerAddress);
@@ -120,6 +124,10 @@ public:
     bool resolveFork(const std::vector<Block>& candidateChain);
     // --- Monitoring/Observability Hook ---
     void emitMetric(const std::string& metric, double value);
+    // P2P networking (basic TCP server/client)
+    void startP2PServer(int port);
+    void stopP2PServer();
+    void connectToPeerTCP(const std::string& host, int port);
 private:
     std::vector<Block> chain;
     std::vector<Transaction> mempool;
@@ -145,6 +153,9 @@ private:
     double txFee = 0.01; // default transaction fee
     int halvingInterval = 100; // blocks per halving
     double initialReward = 1.0;
+    std::atomic<bool> p2pServerRunning{false};
+    std::thread p2pServerThread;
+    void p2pServerLoop(int port);
 };
 
 #endif // BLOCKCHAIN_H
