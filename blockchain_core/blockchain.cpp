@@ -745,6 +745,8 @@ void Blockchain::handleP2PMessage(const std::string& msg, const std::string& pee
             t.publicKeyPem = j["publicKeyPem"];
             if (addTransaction(t)) {
                 std::cout << "[P2P] Transaction added from peer." << std::endl;
+                // Relay transaction to other peers
+                gossipTransaction(t, peerAddress);
             } else {
                 std::cout << "[P2P] Invalid transaction from peer." << std::endl;
             }
@@ -780,6 +782,8 @@ void Blockchain::handleP2PMessage(const std::string& msg, const std::string& pee
             if (validateBlock(block, chain.back())) {
                 chain.push_back(block);
                 std::cout << "[P2P] Block added from peer." << std::endl;
+                // Relay block to other peers
+                gossipBlock(block, peerAddress);
             } else {
                 std::cout << "[P2P] Invalid block from peer." << std::endl;
             }
@@ -822,11 +826,31 @@ void Blockchain::connectToKnownPeers() {
 // Track requests per peer (IP:port string)
 std::unordered_map<std::string, int> peerRequestCount;
 std::unordered_map<std::string, std::chrono::steady_clock::time_point> peerLastRequest;
+std::unordered_map<std::string, std::chrono::steady_clock::time_point> bannedPeers; // Ban expiry per peer
 const int REQUEST_LIMIT = 100; // max requests per window
 const int REQUEST_WINDOW_SEC = 10; // window in seconds
+const int BAN_DURATION_SEC = 60; // ban duration for repeated offenders
+
+// Ban a peer for BAN_DURATION_SEC seconds
+void Blockchain::blockPeer(const std::string& peerAddress) {
+    bannedPeers[peerAddress] = std::chrono::steady_clock::now() + std::chrono::seconds(BAN_DURATION_SEC);
+    std::cout << "[SECURITY] Peer banned: " << peerAddress << " for " << BAN_DURATION_SEC << " seconds." << std::endl;
+}
+
+// Check if a peer is currently banned
+bool Blockchain::isPeerBlocked(const std::string& peerAddress) const {
+    auto it = bannedPeers.find(peerAddress);
+    if (it == bannedPeers.end()) return false;
+    if (std::chrono::steady_clock::now() > it->second) return false;
+    return true;
+}
 
 // Call this at the start of every P2P message handler
 bool Blockchain::checkPeerRateLimit(const std::string& peerAddress) {
+    if (isPeerBlocked(peerAddress)) {
+        logError("Blocked peer attempted request: " + peerAddress);
+        return false;
+    }
     auto now = std::chrono::steady_clock::now();
     auto& last = peerLastRequest[peerAddress];
     if (last.time_since_epoch().count() == 0) last = now;
@@ -842,4 +866,92 @@ bool Blockchain::checkPeerRateLimit(const std::string& peerAddress) {
         return false;
     }
     return true;
+}
+
+// --- Gossip Protocol: Block/Transaction Relay & Deduplication ---
+std::set<std::string> relayedTxIds;
+std::set<std::string> relayedBlockHashes;
+
+void Blockchain::gossipTransaction(const Transaction& tx, const std::string& originPeer) {
+    std::string txId = calculateTxId(tx);
+    if (relayedTxIds.count(txId)) return; // Already relayed
+    relayedTxIds.insert(txId);
+    nlohmann::json jmsg;
+    jmsg["type"] = "tx";
+    jmsg["sender"] = tx.sender;
+    jmsg["receiver"] = tx.receiver;
+    jmsg["amount"] = tx.amount;
+    jmsg["signature"] = tx.signature;
+    jmsg["publicKeyPem"] = tx.publicKeyPem;
+    std::string msg = jmsg.dump();
+    std::lock_guard<std::mutex> lock(peersMutex);
+    for (const auto& peer : peers) {
+        if (peer == originPeer) continue; // Don't relay back to sender
+        // Send message to peer (TCP send)
+        size_t pos = peer.find(":");
+        if (pos == std::string::npos) continue;
+        std::string host = peer.substr(0, pos);
+        int port = std::stoi(peer.substr(pos + 1));
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) continue;
+        sockaddr_in serv_addr{};
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_port = htons(port);
+        inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
+        if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); continue; }
+        send(sock, msg.c_str(), msg.size(), 0);
+        close(sock);
+    }
+}
+
+void Blockchain::gossipBlock(const Block& block, const std::string& originPeer) {
+    if (relayedBlockHashes.count(block.hash)) return; // Already relayed
+    relayedBlockHashes.insert(block.hash);
+    nlohmann::json jmsg;
+    jmsg["type"] = "block";
+    jmsg["index"] = block.index;
+    jmsg["prevHash"] = block.prevHash;
+    jmsg["hash"] = block.hash;
+    jmsg["merkleRoot"] = block.merkleRoot;
+    jmsg["timestamp"] = block.timestamp;
+    jmsg["miner"] = block.miner;
+    jmsg["nonce"] = block.nonce;
+    jmsg["difficulty"] = block.difficulty;
+    for (const auto& tx : block.transactions) {
+        nlohmann::json jtx;
+        jtx["sender"] = tx.sender;
+        jtx["receiver"] = tx.receiver;
+        jtx["amount"] = tx.amount;
+        jtx["signature"] = tx.signature;
+        jtx["publicKeyPem"] = tx.publicKeyPem;
+        jmsg["transactions"].push_back(jtx);
+    }
+    for (const auto& c : block.contents) {
+        nlohmann::json jc;
+        jc["type"] = c.type;
+        jc["filename"] = c.filename;
+        jc["uploader"] = c.uploader;
+        jc["hash"] = c.hash;
+        jc["timestamp"] = c.timestamp;
+        jc["publicKeyPem"] = c.publicKeyPem;
+        jmsg["contents"].push_back(jc);
+    }
+    std::string msg = jmsg.dump();
+    std::lock_guard<std::mutex> lock(peersMutex);
+    for (const auto& peer : peers) {
+        if (peer == originPeer) continue; // Don't relay back to sender
+        size_t pos = peer.find(":");
+        if (pos == std::string::npos) continue;
+        std::string host = peer.substr(0, pos);
+        int port = std::stoi(peer.substr(pos + 1));
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) continue;
+        sockaddr_in serv_addr{};
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_port = htons(port);
+        inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
+        if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); continue; }
+        send(sock, msg.c_str(), msg.size(), 0);
+        close(sock);
+    }
 }

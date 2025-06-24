@@ -111,7 +111,8 @@ public:
     void handleP2PMessage(const std::string& msg, const std::string& peerAddress);
     std::string localAddress;
     void gossipBlock(const Block& block);
-    void gossipTransaction(const Transaction& tx);
+    void gossipTransaction(const Transaction& tx, const std::string& originPeer);
+    void gossipBlock(const Block& block, const std::string& originPeer);
     void broadcastPeerList();
     // --- Security Features ---
     void sendEncrypted(const std::string& peerAddress, const std::string& data);
