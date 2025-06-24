@@ -22,6 +22,95 @@
 #include <unistd.h>
 #include <mutex>
 
+// --- PRODUCTION-GRADE FEATURE STUBS & TODOs ---
+
+// --- Security & Networking ---
+// TODO: Use OpenSSL/TLS for encrypted P2P communication
+// Example stub for encrypted send/receive
+void Blockchain::sendEncrypted(const std::string& peerAddress, const std::string& data) {
+    // TODO: Use OpenSSL to encrypt and send data to peer
+    // 1. Establish TLS connection
+    // 2. Send data securely
+    std::cout << "[SECURE] Sending encrypted data to " << peerAddress << std::endl;
+}
+std::string Blockchain::receiveEncrypted(const std::string& peerAddress) {
+    // TODO: Use OpenSSL to receive and decrypt data from peer
+    // 1. Establish TLS connection
+    // 2. Receive and decrypt data
+    std::cout << "[SECURE] Receiving encrypted data from " << peerAddress << std::endl;
+    return "";
+}
+
+// TODO: Peer authentication (public key handshake)
+// 1. Exchange public keys on connect
+// 2. Challenge/response signature verification
+// 3. Store/verify peer public keys
+
+// TODO: DDoS protection (rate limiting, peer scoring, ban list)
+// 1. Track requests per peer
+// 2. Block/ban if rate exceeded or misbehavior
+// 3. Use peerReputation and blockPeer logic
+
+// TODO: Replay/double-spend protection
+// 1. Maintain set of seen transaction IDs
+// 2. Reject duplicate/replayed transactions
+// std::set<std::string> seenTxIds;
+// In addTransaction: if (seenTxIds.count(txId)) return false;
+
+// TODO: Gossip protocol for block/tx propagation
+// 1. Relay every new block/tx to all known peers (not just direct relay)
+// 2. Avoid duplicate relays (track relayed IDs)
+// void Blockchain::gossipBlock(const Block& block) { /* ... */ }
+// void Blockchain::gossipTransaction(const Transaction& tx) { /* ... */ }
+
+// TODO: Automatic chain sync (missing blocks fetch)
+// 1. On peer connect, compare chain heights
+// 2. Request missing blocks from peers
+// void Blockchain::requestMissingBlocks(int fromIndex) { /* ... */ }
+
+// TODO: Fork resolution (longest chain, BFT, etc.)
+// 1. On fork, compare chain length/work
+// 2. Use BFT signatures if enabled
+// bool Blockchain::resolveFork(const std::vector<Block>& candidateChain) { /* ... */ }
+
+// --- Reliability & Monitoring ---
+// TODO: Crash recovery (robust DB, atomic writes)
+// 1. Use SQLite transactions (BEGIN/COMMIT)
+// 2. Atomic file writes for critical data
+
+// TODO: Logging (info, warning, error, audit)
+// 1. Add logEvent(level, msg) for all major actions
+// 2. Separate audit log for sensitive actions
+
+// TODO: Metrics/monitoring (Prometheus, Grafana integration)
+// 1. Expose metrics endpoint or write to file
+// 2. Integrate with monitoring tools
+
+// TODO: Automated tests (unit, integration, fuzzing)
+// 1. Use GoogleTest/Catch2 for C++
+// 2. Add tests in tests/ folder
+
+// --- Deployment ---
+// TODO: Dockerfile for containerization
+// TODO: CI/CD scripts (GitHub Actions, GitLab CI)
+// TODO: Configurable via env vars or config files
+// TODO: Graceful shutdown, restart, and upgrade support
+// 1. Handle SIGINT/SIGTERM, save state
+
+// --- User/Dev Experience ---
+// TODO: REST/gRPC API for explorer/wallets
+// 1. Add HTTP server (Crow, Pistache, cpp-httplib, etc.)
+// TODO: Web-based explorer (client/ folder)
+// TODO: CLI wallet (import/export, password protection)
+// TODO: Documentation (API, architecture, usage)
+
+// --- Governance & Tokenomics ---
+// TODO: DAO voting logic (not just stubs)
+// 1. On-chain proposals, voting, execution
+// TODO: On-chain parameter updates (fees, halving, etc.)
+// TODO: Slashing for malicious validators (if PoS/DPoS)
+// 1. Detect malicious behavior, slash stake
+
 Blockchain::Blockchain() {
     if (sqlite3_open("ahmiyat.db", &db) != SQLITE_OK) {
         std::cerr << "Failed to open database: " << sqlite3_errmsg(db) << std::endl;
@@ -677,3 +766,21 @@ void Blockchain::handleP2PMessage(const std::string& msg) {
 }
 
 // --- Thread Safety for Peers ---
+
+// --- Peer Management for CLI ---
+void Blockchain::addKnownPeer(const std::string& host, int port) {
+    std::lock_guard<std::mutex> lock(peersMutex);
+    knownPeers.insert({host, port});
+}
+
+std::set<std::pair<std::string, int>> Blockchain::getKnownPeers() const {
+    std::lock_guard<std::mutex> lock(peersMutex);
+    return knownPeers;
+}
+
+void Blockchain::connectToKnownPeers() {
+    std::lock_guard<std::mutex> lock(peersMutex);
+    for (const auto& [host, port] : knownPeers) {
+        connectToPeerTCP(host, port);
+    }
+}

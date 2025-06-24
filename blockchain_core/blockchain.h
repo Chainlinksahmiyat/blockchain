@@ -134,6 +134,10 @@ public:
     void connectToPeerTCP(const std::string& host, int port);
     void broadcastTransactionToPeer(const Transaction& tx, const std::string& host, int port);
     void broadcastBlockToPeer(const Block& block, const std::string& host, int port);
+    // --- Peer Management for CLI ---
+    void addKnownPeer(const std::string& host, int port);
+    std::set<std::pair<std::string, int>> getKnownPeers() const;
+    void connectToKnownPeers();
 private:
     void handleP2PMessage(const std::string& msg);
     std::vector<Block> chain;
