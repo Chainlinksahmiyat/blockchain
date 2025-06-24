@@ -128,7 +128,10 @@ public:
     void startP2PServer(int port);
     void stopP2PServer();
     void connectToPeerTCP(const std::string& host, int port);
+    void broadcastTransactionToPeer(const Transaction& tx, const std::string& host, int port);
+    void broadcastBlockToPeer(const Block& block, const std::string& host, int port);
 private:
+    void handleP2PMessage(const std::string& msg);
     std::vector<Block> chain;
     std::vector<Transaction> mempool;
     std::vector<Content> pendingContents;

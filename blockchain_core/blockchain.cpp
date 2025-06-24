@@ -656,12 +656,11 @@ void Blockchain::p2pServerLoop(int port) {
             sockaddr_in client_addr; socklen_t len = sizeof(client_addr);
             int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &len);
             if (client_fd >= 0) {
-                char buffer[2048] = {0};
+                char buffer[4096] = {0};
                 ssize_t n = read(client_fd, buffer, sizeof(buffer)-1);
                 if (n > 0) {
                     buffer[n] = 0;
-                    std::cout << "[P2P] Received: " << buffer << std::endl;
-                    // TODO: Parse and handle block/tx relay
+                    handleP2PMessage(buffer);
                 }
                 close(client_fd);
             }
@@ -686,4 +685,122 @@ void Blockchain::connectToPeerTCP(const std::string& host, int port) {
     send(sock, msg.c_str(), msg.size(), 0);
     close(sock);
     std::cout << "[P2P] Sent message to " << host << ":" << port << std::endl;
+}
+
+void Blockchain::broadcastTransactionToPeer(const Transaction& tx, const std::string& host, int port) {
+    nlohmann::json jtx;
+    jtx["type"] = "tx";
+    jtx["sender"] = tx.sender;
+    jtx["receiver"] = tx.receiver;
+    jtx["amount"] = tx.amount;
+    jtx["signature"] = tx.signature;
+    jtx["publicKeyPem"] = tx.publicKeyPem;
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) return;
+    sockaddr_in serv_addr{};
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(port);
+    inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
+    if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); return; }
+    std::string msg = jtx.dump();
+    send(sock, msg.c_str(), msg.size(), 0);
+    close(sock);
+}
+
+void Blockchain::broadcastBlockToPeer(const Block& block, const std::string& host, int port) {
+    nlohmann::json jblock;
+    jblock["type"] = "block";
+    jblock["index"] = block.index;
+    jblock["prevHash"] = block.prevHash;
+    jblock["hash"] = block.hash;
+    jblock["merkleRoot"] = block.merkleRoot;
+    jblock["timestamp"] = block.timestamp;
+    jblock["miner"] = block.miner;
+    jblock["nonce"] = block.nonce;
+    jblock["difficulty"] = block.difficulty;
+    for (const auto& tx : block.transactions) {
+        nlohmann::json jtx;
+        jtx["sender"] = tx.sender;
+        jtx["receiver"] = tx.receiver;
+        jtx["amount"] = tx.amount;
+        jtx["signature"] = tx.signature;
+        jtx["publicKeyPem"] = tx.publicKeyPem;
+        jblock["transactions"].push_back(jtx);
+    }
+    for (const auto& c : block.contents) {
+        nlohmann::json jc;
+        jc["type"] = c.type;
+        jc["filename"] = c.filename;
+        jc["uploader"] = c.uploader;
+        jc["hash"] = c.hash;
+        jc["timestamp"] = c.timestamp;
+        jc["publicKeyPem"] = c.publicKeyPem;
+        jblock["contents"].push_back(jc);
+    }
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) return;
+    sockaddr_in serv_addr{};
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(port);
+    inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
+    if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); return; }
+    std::string msg = jblock.dump();
+    send(sock, msg.c_str(), msg.size(), 0);
+    close(sock);
+}
+
+void Blockchain::handleP2PMessage(const std::string& msg) {
+    try {
+        auto j = nlohmann::json::parse(msg);
+        if (j["type"] == "tx") {
+            Transaction t;
+            t.sender = j["sender"];
+            t.receiver = j["receiver"];
+            t.amount = j["amount"];
+            t.signature = j["signature"];
+            t.publicKeyPem = j["publicKeyPem"];
+            if (addTransaction(t)) {
+                std::cout << "[P2P] Transaction added from peer." << std::endl;
+            } else {
+                std::cout << "[P2P] Invalid transaction from peer." << std::endl;
+            }
+        } else if (j["type"] == "block") {
+            Block block;
+            block.index = j["index"];
+            block.prevHash = j["prevHash"];
+            block.hash = j["hash"];
+            block.merkleRoot = j.value("merkleRoot", "");
+            block.timestamp = j["timestamp"];
+            block.miner = j["miner"];
+            block.nonce = j["nonce"];
+            block.difficulty = j["difficulty"];
+            for (const auto& jtx : j["transactions"]) {
+                Transaction tx;
+                tx.sender = jtx["sender"];
+                tx.receiver = jtx["receiver"];
+                tx.amount = jtx["amount"];
+                tx.signature = jtx["signature"];
+                tx.publicKeyPem = jtx["publicKeyPem"];
+                block.transactions.push_back(tx);
+            }
+            for (const auto& jc : j["contents"]) {
+                Content c;
+                c.type = jc["type"];
+                c.filename = jc["filename"];
+                c.uploader = jc["uploader"];
+                c.hash = jc["hash"];
+                c.timestamp = jc["timestamp"];
+                c.publicKeyPem = jc["publicKeyPem"];
+                block.contents.push_back(c);
+            }
+            if (validateBlock(block, chain.back())) {
+                chain.push_back(block);
+                std::cout << "[P2P] Block added from peer." << std::endl;
+            } else {
+                std::cout << "[P2P] Invalid block from peer." << std::endl;
+            }
+        }
+    } catch (...) {
+        std::cout << "[P2P] Failed to parse message." << std::endl;
+    }
 }

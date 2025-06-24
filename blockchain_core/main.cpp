@@ -139,6 +139,25 @@ int main(int argc, char* argv[]) {
             int port = std::stoi(argv[3]);
             chain.connectToPeerTCP(host, port);
             return 0;
+        } else if (strcmp(argv[1], "broadcast-tx") == 0 && argc == 7) {
+            Transaction t = {argv[2], argv[3], std::stod(argv[4]), argv[5], argv[6]};
+            std::string host = argv[2];
+            int port = std::stoi(argv[3]);
+            chain.broadcastTransactionToPeer(t, host, port);
+            std::cout << "Transaction broadcasted to peer." << std::endl;
+            return 0;
+        } else if (strcmp(argv[1], "broadcast-block") == 0 && argc == 4) {
+            int blockIdx = std::stoi(argv[2]);
+            std::string host = argv[3];
+            int port = std::stoi(argv[4]);
+            auto chainBlocks = chain.getChain();
+            if (blockIdx >= 0 && blockIdx < (int)chainBlocks.size()) {
+                chain.broadcastBlockToPeer(chainBlocks[blockIdx], host, port);
+                std::cout << "Block broadcasted to peer." << std::endl;
+            } else {
+                std::cout << "Invalid block index." << std::endl;
+            }
+            return 0;
         }
     }
     // Print balances
