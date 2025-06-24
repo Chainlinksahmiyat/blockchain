@@ -182,6 +182,15 @@ private:
     void handlePeerListMessage(const std::string& msg);
     // --- DDoS Protection ---
     bool checkPeerRateLimit(const std::string& peerAddress);
+    // --- P2P Encryption & Peer Authentication ---
+    bool performPeerHandshake(int sock, const std::string& expectedPeerPubKey);
+    // --- Crash Recovery ---
+    bool beginDbTransaction();
+    bool commitDbTransaction();
+    bool rollbackDbTransaction();
+    void enableWALMode();
+    // --- Monitoring ---
+    void exportMetrics();
 };
 
 #endif // BLOCKCHAIN_H

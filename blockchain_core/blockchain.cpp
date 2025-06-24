@@ -840,3 +840,84 @@ void Blockchain::onPeerConnected(const std::string& peerAddress, int peerHeight)
         requestMissingBlocks(ourHeight + 1, peerAddress);
     }
 }
+
+// --- Fork Resolution: Longest Chain/BFT ---
+bool Blockchain::resolveFork(const std::vector<Block>& candidateChain) {
+    std::lock_guard<std::mutex> lock(chainMutex);
+    // 1. Validate candidate chain
+    if (candidateChain.empty() || candidateChain[0].index != 0) return false;
+    for (size_t i = 1; i < candidateChain.size(); ++i) {
+        if (candidateChain[i].prevHash != candidateChain[i-1].hash) return false;
+        if (candidateChain[i].hash != calculateHash(candidateChain[i])) return false;
+        if (!validProof(candidateChain[i])) return false;
+        if (candidateChain[i].timestamp < candidateChain[i-1].timestamp) return false;
+    }
+    // 2. Compare chain length (or total work for PoW)
+    if (candidateChain.size() <= chain.size()) return false;
+    // 3. Replace chain and update state
+    chain = candidateChain;
+    // TODO: Rebuild balances, mempool, etc. as needed
+    logConsensusEvent("Fork resolved", "Chain replaced with longer chain");
+    return true;
+}
+
+// --- P2P Encryption & Peer Authentication (TLS + Public Key Handshake) ---
+// Use OpenSSL for TLS. On connect, exchange public keys and verify with challenge/response.
+// These are stubs; see sendEncrypted/receiveEncrypted for where to integrate OpenSSL.
+bool Blockchain::performPeerHandshake(int sock, const std::string& expectedPeerPubKey) {
+    // TODO: Exchange public keys, send challenge, verify signature
+    // Use OpenSSL for TLS handshake
+    // Return true if peer is authenticated
+    return true;
+}
+
+// --- Crash Recovery: Atomic DB Writes, WAL ---
+bool Blockchain::beginDbTransaction() {
+    if (!db) return false;
+    char* errMsg = nullptr;
+    if (sqlite3_exec(db, "BEGIN TRANSACTION;", nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        logError(std::string("Failed to begin DB transaction: ") + errMsg);
+        sqlite3_free(errMsg);
+        return false;
+    }
+    return true;
+}
+bool Blockchain::commitDbTransaction() {
+    if (!db) return false;
+    char* errMsg = nullptr;
+    if (sqlite3_exec(db, "COMMIT;", nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        logError(std::string("Failed to commit DB transaction: ") + errMsg);
+        sqlite3_free(errMsg);
+        return false;
+    }
+    return true;
+}
+bool Blockchain::rollbackDbTransaction() {
+    if (!db) return false;
+    char* errMsg = nullptr;
+    if (sqlite3_exec(db, "ROLLBACK;", nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        logError(std::string("Failed to rollback DB transaction: ") + errMsg);
+        sqlite3_free(errMsg);
+        return false;
+    }
+    return true;
+}
+void Blockchain::enableWALMode() {
+    if (!db) return;
+    char* errMsg = nullptr;
+    if (sqlite3_exec(db, "PRAGMA journal_mode=WAL;", nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        logError(std::string("Failed to enable WAL mode: ") + errMsg);
+        sqlite3_free(errMsg);
+    }
+}
+
+// --- Monitoring: Prometheus/Grafana Hooks ---
+void Blockchain::exportMetrics() {
+    // Example: print metrics to file (can be served via HTTP for Prometheus scrape)
+    std::ofstream metrics("blockchain_metrics.prom");
+    metrics << "block_height " << (chain.size() - 1) << std::endl;
+    metrics << "peer_count " << peers.size() << std::endl;
+    metrics << "mempool_size " << mempool.size() << std::endl;
+    // Add more metrics as needed
+    metrics.close();
+}
