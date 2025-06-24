@@ -20,6 +20,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <mutex>
 
 Blockchain::Blockchain() {
     if (sqlite3_open("ahmiyat.db", &db) != SQLITE_OK) {
@@ -35,6 +36,7 @@ Blockchain::Blockchain() {
         }
     }
     createGenesisBlock();
+    // localAddress = "127.0.0.1:12345"; // Example, set appropriately
 }
 
 Blockchain::~Blockchain() {
@@ -529,224 +531,85 @@ bool Blockchain::validateBlockBFT(const Block& block) const {
     return true;
 }
 
+// --- Peer Discovery & Automatic Peer Management ---
+void Blockchain::broadcastPeerList() {
+    std::lock_guard<std::mutex> lock(peersMutex);
+    nlohmann::json jmsg;
+    jmsg["type"] = "peers";
+    jmsg["peers"] = std::vector<std::string>(peers.begin(), peers.end());
+    for (const auto& peer : peers) {
+        // Parse host:port
+        size_t pos = peer.find(":");
+        if (pos == std::string::npos) continue;
+        std::string host = peer.substr(0, pos);
+        int port = std::stoi(peer.substr(pos + 1));
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) continue;
+        sockaddr_in serv_addr{};
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_port = htons(port);
+        inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
+        if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); continue; }
+        std::string msg = jmsg.dump();
+        send(sock, msg.c_str(), msg.size(), 0);
+        close(sock);
+    }
+}
+
+void Blockchain::requestPeerList() {
+    std::lock_guard<std::mutex> lock(peersMutex);
+    nlohmann::json jmsg;
+    jmsg["type"] = "getpeers";
+    for (const auto& peer : peers) {
+        size_t pos = peer.find(":");
+        if (pos == std::string::npos) continue;
+        std::string host = peer.substr(0, pos);
+        int port = std::stoi(peer.substr(pos + 1));
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) continue;
+        sockaddr_in serv_addr{};
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_port = htons(port);
+        inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
+        if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); continue; }
+        std::string msg = jmsg.dump();
+        send(sock, msg.c_str(), msg.size(), 0);
+        close(sock);
+    }
+}
+
+void Blockchain::discoverPeers() {
+    // Periodically broadcast and request peer lists
+    broadcastPeerList();
+    requestPeerList();
+}
+
 void Blockchain::addPeer(const std::string& peerAddress) {
-    peers.insert(peerAddress);
-    std::cout << "Peer added: " << peerAddress << std::endl;
+    std::lock_guard<std::mutex> lock(peersMutex);
+    if (peerAddress == localAddress) return; // Don't add self
+    if (isPeerBlocked(peerAddress)) return;
+    if (peers.count(peerAddress) == 0) {
+        peers.insert(peerAddress);
+        std::cout << "Peer added: " << peerAddress << std::endl;
+        // Optionally, connect to new peer
+        size_t pos = peerAddress.find(":");
+        if (pos != std::string::npos) {
+            std::string host = peerAddress.substr(0, pos);
+            int port = std::stoi(peerAddress.substr(pos + 1));
+            connectToPeerTCP(host, port);
+        }
+    }
 }
 
 void Blockchain::removePeer(const std::string& peerAddress) {
+    std::lock_guard<std::mutex> lock(peersMutex);
     peers.erase(peerAddress);
     std::cout << "Peer removed: " << peerAddress << std::endl;
 }
 
 std::set<std::string> Blockchain::getPeers() const {
+    std::lock_guard<std::mutex> lock(peersMutex);
     return peers;
-}
-
-void Blockchain::listenForPeers(int port) {
-    // TODO: Implement TCP socket server to accept peer connections
-    std::cout << "Listening for peers on port " << port << std::endl;
-}
-
-void Blockchain::gossipBlock(const Block& block) {
-    // TODO: Relay block to all peers
-    std::cout << "Gossiping block " << block.index << " to peers..." << std::endl;
-}
-
-void Blockchain::gossipTransaction(const Transaction& tx) {
-    // TODO: Relay transaction to all peers
-    std::cout << "Gossiping transaction from " << tx.sender << " to peers..." << std::endl;
-}
-
-void Blockchain::discoverPeers() {
-    // TODO: Implement peer discovery (broadcast/receive peer list)
-    std::cout << "Discovering peers..." << std::endl;
-}
-
-std::vector<Block> Blockchain::getChain() const {
-    return chain;
-}
-
-std::map<std::string, double> Blockchain::getBalances() const {
-    return balances;
-}
-
-std::vector<Transaction> Blockchain::getMempool() const {
-    return mempool;
-}
-
-// --- Peer-to-Peer Networking Stubs ---
-void Blockchain::connectToPeer(const std::string& peerAddress) {
-    // TODO: Implement peer connection logic (e.g., sockets, HTTP, etc.)
-    std::cout << "Connecting to peer: " << peerAddress << std::endl;
-}
-
-void Blockchain::broadcastBlock(const Block& block) {
-    // TODO: Implement block broadcasting to peers
-    std::cout << "Broadcasting block: " << block.index << std::endl;
-}
-
-void Blockchain::receiveBlock(const Block& block) {
-    // TODO: Implement block receiving and validation from peers
-    std::cout << "Received block: " << block.index << std::endl;
-    // Example: validate and add to chain if valid
-    if (validateBlock(block, chain.back())) {
-        chain.push_back(block);
-        adjustDifficulty();
-    } else {
-        logError("Received invalid block from peer.");
-    }
-}
-
-void Blockchain::sendEncrypted(const std::string& peerAddress, const std::string& data) {
-    // TODO: Use OpenSSL to encrypt and send data to peer
-    std::cout << "[SECURE] Sending encrypted data to " << peerAddress << std::endl;
-}
-
-std::string Blockchain::receiveEncrypted(const std::string& peerAddress) {
-    // TODO: Use OpenSSL to receive and decrypt data from peer
-    std::cout << "[SECURE] Receiving encrypted data from " << peerAddress << std::endl;
-    return "";
-}
-
-bool Blockchain::isPeerBlocked(const std::string& peerAddress) const {
-    return blockedPeers.count(peerAddress) > 0;
-}
-
-void Blockchain::blockPeer(const std::string& peerAddress) {
-    blockedPeers.insert(peerAddress);
-    std::cout << "[SECURITY] Blocked peer: " << peerAddress << std::endl;
-}
-
-void Blockchain::unblockPeer(const std::string& peerAddress) {
-    blockedPeers.erase(peerAddress);
-    std::cout << "[SECURITY] Unblocked peer: " << peerAddress << std::endl;
-}
-
-void Blockchain::startP2PServer(int port) {
-    if (p2pServerRunning) return;
-    p2pServerRunning = true;
-    p2pServerThread = std::thread(&Blockchain::p2pServerLoop, this, port);
-    std::cout << "[P2P] Server started on port " << port << std::endl;
-}
-
-void Blockchain::stopP2PServer() {
-    if (!p2pServerRunning) return;
-    p2pServerRunning = false;
-    if (p2pServerThread.joinable()) p2pServerThread.join();
-    std::cout << "[P2P] Server stopped." << std::endl;
-}
-
-void Blockchain::p2pServerLoop(int port) {
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) { std::cerr << "[P2P] Socket error\n"; return; }
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(port);
-    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        std::cerr << "[P2P] Bind error\n"; close(server_fd); return;
-    }
-    listen(server_fd, 5);
-    while (p2pServerRunning) {
-        fd_set fds; FD_ZERO(&fds); FD_SET(server_fd, &fds);
-        timeval tv{1,0};
-        int sel = select(server_fd+1, &fds, nullptr, nullptr, &tv);
-        if (sel > 0 && FD_ISSET(server_fd, &fds)) {
-            sockaddr_in client_addr; socklen_t len = sizeof(client_addr);
-            int client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &len);
-            if (client_fd >= 0) {
-                char buffer[4096] = {0};
-                ssize_t n = read(client_fd, buffer, sizeof(buffer)-1);
-                if (n > 0) {
-                    buffer[n] = 0;
-                    handleP2PMessage(buffer);
-                }
-                close(client_fd);
-            }
-        }
-    }
-    close(server_fd);
-}
-
-void Blockchain::connectToPeerTCP(const std::string& host, int port) {
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) { std::cerr << "[P2P] Socket error\n"; return; }
-    sockaddr_in serv_addr{};
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(port);
-    if (inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr) <= 0) {
-        std::cerr << "[P2P] Invalid address\n"; close(sock); return;
-    }
-    if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-        std::cerr << "[P2P] Connection failed\n"; close(sock); return;
-    }
-    std::string msg = "Hello from peer!";
-    send(sock, msg.c_str(), msg.size(), 0);
-    close(sock);
-    std::cout << "[P2P] Sent message to " << host << ":" << port << std::endl;
-}
-
-void Blockchain::broadcastTransactionToPeer(const Transaction& tx, const std::string& host, int port) {
-    nlohmann::json jtx;
-    jtx["type"] = "tx";
-    jtx["sender"] = tx.sender;
-    jtx["receiver"] = tx.receiver;
-    jtx["amount"] = tx.amount;
-    jtx["signature"] = tx.signature;
-    jtx["publicKeyPem"] = tx.publicKeyPem;
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) return;
-    sockaddr_in serv_addr{};
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(port);
-    inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
-    if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); return; }
-    std::string msg = jtx.dump();
-    send(sock, msg.c_str(), msg.size(), 0);
-    close(sock);
-}
-
-void Blockchain::broadcastBlockToPeer(const Block& block, const std::string& host, int port) {
-    nlohmann::json jblock;
-    jblock["type"] = "block";
-    jblock["index"] = block.index;
-    jblock["prevHash"] = block.prevHash;
-    jblock["hash"] = block.hash;
-    jblock["merkleRoot"] = block.merkleRoot;
-    jblock["timestamp"] = block.timestamp;
-    jblock["miner"] = block.miner;
-    jblock["nonce"] = block.nonce;
-    jblock["difficulty"] = block.difficulty;
-    for (const auto& tx : block.transactions) {
-        nlohmann::json jtx;
-        jtx["sender"] = tx.sender;
-        jtx["receiver"] = tx.receiver;
-        jtx["amount"] = tx.amount;
-        jtx["signature"] = tx.signature;
-        jtx["publicKeyPem"] = tx.publicKeyPem;
-        jblock["transactions"].push_back(jtx);
-    }
-    for (const auto& c : block.contents) {
-        nlohmann::json jc;
-        jc["type"] = c.type;
-        jc["filename"] = c.filename;
-        jc["uploader"] = c.uploader;
-        jc["hash"] = c.hash;
-        jc["timestamp"] = c.timestamp;
-        jc["publicKeyPem"] = c.publicKeyPem;
-        jblock["contents"].push_back(jc);
-    }
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) return;
-    sockaddr_in serv_addr{};
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(port);
-    inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
-    if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); return; }
-    std::string msg = jblock.dump();
-    send(sock, msg.c_str(), msg.size(), 0);
-    close(sock);
 }
 
 void Blockchain::handleP2PMessage(const std::string& msg) {
@@ -799,8 +662,18 @@ void Blockchain::handleP2PMessage(const std::string& msg) {
             } else {
                 std::cout << "[P2P] Invalid block from peer." << std::endl;
             }
+        } else if (j["type"] == "peers") {
+            // Merge received peers
+            for (const auto& peer : j["peers"]) {
+                addPeer(peer);
+            }
+        } else if (j["type"] == "getpeers") {
+            // Respond with our peer list
+            broadcastPeerList();
         }
     } catch (...) {
         std::cout << "[P2P] Failed to parse message." << std::endl;
     }
 }
+
+// --- Thread Safety for Peers ---

@@ -21,6 +21,7 @@
 #include <set>
 #include <thread>
 #include <atomic>
+#include <mutex>
 
 struct Transaction {
     std::string sender; // address (hash of public key)
@@ -104,11 +105,14 @@ public:
     void receiveBlock(const Block& block);
     void addPeer(const std::string& peerAddress);
     void removePeer(const std::string& peerAddress);
+    void requestPeerList();
+    void discoverPeers();
     std::set<std::string> getPeers() const;
-    void listenForPeers(int port);
+    void handleP2PMessage(const std::string& msg);
+    std::string localAddress;
     void gossipBlock(const Block& block);
     void gossipTransaction(const Transaction& tx);
-    void discoverPeers();
+    void broadcastPeerList();
     // --- Security Features ---
     void sendEncrypted(const std::string& peerAddress, const std::string& data);
     std::string receiveEncrypted(const std::string& peerAddress);
@@ -146,6 +150,8 @@ private:
     std::set<std::string> peers;
     std::set<std::string> blockedPeers;
     std::map<std::string, int> peerReputation;
+    std::set<std::pair<std::string, int>> knownPeers;
+    mutable std::mutex peersMutex;
     std::string calculateHash(const Block& block) const;
     void createGenesisBlock();
     bool validProof(const Block& block) const;
@@ -159,6 +165,7 @@ private:
     std::atomic<bool> p2pServerRunning{false};
     std::thread p2pServerThread;
     void p2pServerLoop(int port);
+    void handlePeerListMessage(const std::string& msg);
 };
 
 #endif // BLOCKCHAIN_H

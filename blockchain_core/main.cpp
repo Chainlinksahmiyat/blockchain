@@ -158,6 +158,25 @@ int main(int argc, char* argv[]) {
                 std::cout << "Invalid block index." << std::endl;
             }
             return 0;
+        } else if (strcmp(argv[1], "add-peer") == 0 && argc == 4) {
+            std::string host = argv[2];
+            int port = std::stoi(argv[3]);
+            chain.addKnownPeer(host, port);
+            std::cout << "Peer added: " << host << ":" << port << std::endl;
+            return 0;
+        } else if (strcmp(argv[1], "show-peers") == 0) {
+            for (const auto& [host, port] : chain.getKnownPeers()) {
+                std::cout << host << ":" << port << std::endl;
+            }
+            return 0;
+        } else if (strcmp(argv[1], "broadcast-peers") == 0) {
+            chain.broadcastPeerList();
+            std::cout << "Peer list broadcasted." << std::endl;
+            return 0;
+        } else if (strcmp(argv[1], "connect-known-peers") == 0) {
+            chain.connectToKnownPeers();
+            std::cout << "Connecting to all known peers..." << std::endl;
+            return 0;
         }
     }
     // Print balances
