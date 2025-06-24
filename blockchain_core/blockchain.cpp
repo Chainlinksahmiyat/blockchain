@@ -795,163 +795,48 @@ void Blockchain::handleP2PMessage(const std::string& msg, const std::string& pee
         } else if (j["type"] == "getpeers") {
             // Respond with our peer list
             broadcastPeerList();
+        } else if (j["type"] == "getblocks") {
+            int fromIdx = j["fromIndex"];
+            handleGetBlocksRequest(fromIdx, peerAddress);
         }
     } catch (...) {
         std::cout << "[P2P] Failed to parse message." << std::endl;
     }
 }
-// NOTE: Update all call sites of handleP2PMessage to pass peerAddress as second argument.
 
-// --- Thread Safety for Peers ---
-
-// --- Peer Management for CLI ---
-void Blockchain::addKnownPeer(const std::string& host, int port) {
-    std::lock_guard<std::mutex> lock(peersMutex);
-    knownPeers.insert({host, port});
-}
-
-std::set<std::pair<std::string, int>> Blockchain::getKnownPeers() const {
-    std::lock_guard<std::mutex> lock(peersMutex);
-    return knownPeers;
-}
-
-void Blockchain::connectToKnownPeers() {
-    std::lock_guard<std::mutex> lock(peersMutex);
-    for (const auto& [host, port] : knownPeers) {
-        connectToPeerTCP(host, port);
-    }
-}
-
-// --- DDoS Protection: Rate Limiting, Peer Scoring, Ban List ---
-// Track requests per peer (IP:port string)
-std::unordered_map<std::string, int> peerRequestCount;
-std::unordered_map<std::string, std::chrono::steady_clock::time_point> peerLastRequest;
-std::unordered_map<std::string, std::chrono::steady_clock::time_point> bannedPeers; // Ban expiry per peer
-const int REQUEST_LIMIT = 100; // max requests per window
-const int REQUEST_WINDOW_SEC = 10; // window in seconds
-const int BAN_DURATION_SEC = 60; // ban duration for repeated offenders
-
-// Ban a peer for BAN_DURATION_SEC seconds
-void Blockchain::blockPeer(const std::string& peerAddress) {
-    bannedPeers[peerAddress] = std::chrono::steady_clock::now() + std::chrono::seconds(BAN_DURATION_SEC);
-    std::cout << "[SECURITY] Peer banned: " << peerAddress << " for " << BAN_DURATION_SEC << " seconds." << std::endl;
-}
-
-// Check if a peer is currently banned
-bool Blockchain::isPeerBlocked(const std::string& peerAddress) const {
-    auto it = bannedPeers.find(peerAddress);
-    if (it == bannedPeers.end()) return false;
-    if (std::chrono::steady_clock::now() > it->second) return false;
-    return true;
-}
-
-// Call this at the start of every P2P message handler
-bool Blockchain::checkPeerRateLimit(const std::string& peerAddress) {
-    if (isPeerBlocked(peerAddress)) {
-        logError("Blocked peer attempted request: " + peerAddress);
-        return false;
-    }
-    auto now = std::chrono::steady_clock::now();
-    auto& last = peerLastRequest[peerAddress];
-    if (last.time_since_epoch().count() == 0) last = now;
-    auto& count = peerRequestCount[peerAddress];
-    if (std::chrono::duration_cast<std::chrono::seconds>(now - last).count() > REQUEST_WINDOW_SEC) {
-        count = 0;
-        last = now;
-    }
-    count++;
-    if (count > REQUEST_LIMIT) {
-        reportPeerMisbehavior(peerAddress);
-        logError("Peer rate limit exceeded: " + peerAddress);
-        return false;
-    }
-    return true;
-}
-
-// --- Gossip Protocol: Block/Transaction Relay & Deduplication ---
-std::set<std::string> relayedTxIds;
-std::set<std::string> relayedBlockHashes;
-
-void Blockchain::gossipTransaction(const Transaction& tx, const std::string& originPeer) {
-    std::string txId = calculateTxId(tx);
-    if (relayedTxIds.count(txId)) return; // Already relayed
-    relayedTxIds.insert(txId);
+// --- Automatic Chain Sync: Fetch Missing Blocks from Peers ---
+void Blockchain::requestMissingBlocks(int fromIndex, const std::string& peerAddress) {
     nlohmann::json jmsg;
-    jmsg["type"] = "tx";
-    jmsg["sender"] = tx.sender;
-    jmsg["receiver"] = tx.receiver;
-    jmsg["amount"] = tx.amount;
-    jmsg["signature"] = tx.signature;
-    jmsg["publicKeyPem"] = tx.publicKeyPem;
+    jmsg["type"] = "getblocks";
+    jmsg["fromIndex"] = fromIndex;
     std::string msg = jmsg.dump();
-    std::lock_guard<std::mutex> lock(peersMutex);
-    for (const auto& peer : peers) {
-        if (peer == originPeer) continue; // Don't relay back to sender
-        // Send message to peer (TCP send)
-        size_t pos = peer.find(":");
-        if (pos == std::string::npos) continue;
-        std::string host = peer.substr(0, pos);
-        int port = std::stoi(peer.substr(pos + 1));
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock < 0) continue;
-        sockaddr_in serv_addr{};
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(port);
-        inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
-        if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); continue; }
-        send(sock, msg.c_str(), msg.size(), 0);
-        close(sock);
+    size_t pos = peerAddress.find(":");
+    if (pos == std::string::npos) return;
+    std::string host = peerAddress.substr(0, pos);
+    int port = std::stoi(peerAddress.substr(pos + 1));
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) return;
+    sockaddr_in serv_addr{};
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(port);
+    inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
+    if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); return; }
+    send(sock, msg.c_str(), msg.size(), 0);
+    close(sock);
+}
+
+// Respond to getblocks request
+void Blockchain::handleGetBlocksRequest(int fromIndex, const std::string& peerAddress) {
+    std::lock_guard<std::mutex> lock(chainMutex);
+    for (size_t i = fromIndex; i < chain.size(); ++i) {
+        gossipBlock(chain[i], peerAddress); // Send each missing block to requester
     }
 }
 
-void Blockchain::gossipBlock(const Block& block, const std::string& originPeer) {
-    if (relayedBlockHashes.count(block.hash)) return; // Already relayed
-    relayedBlockHashes.insert(block.hash);
-    nlohmann::json jmsg;
-    jmsg["type"] = "block";
-    jmsg["index"] = block.index;
-    jmsg["prevHash"] = block.prevHash;
-    jmsg["hash"] = block.hash;
-    jmsg["merkleRoot"] = block.merkleRoot;
-    jmsg["timestamp"] = block.timestamp;
-    jmsg["miner"] = block.miner;
-    jmsg["nonce"] = block.nonce;
-    jmsg["difficulty"] = block.difficulty;
-    for (const auto& tx : block.transactions) {
-        nlohmann::json jtx;
-        jtx["sender"] = tx.sender;
-        jtx["receiver"] = tx.receiver;
-        jtx["amount"] = tx.amount;
-        jtx["signature"] = tx.signature;
-        jtx["publicKeyPem"] = tx.publicKeyPem;
-        jmsg["transactions"].push_back(jtx);
-    }
-    for (const auto& c : block.contents) {
-        nlohmann::json jc;
-        jc["type"] = c.type;
-        jc["filename"] = c.filename;
-        jc["uploader"] = c.uploader;
-        jc["hash"] = c.hash;
-        jc["timestamp"] = c.timestamp;
-        jc["publicKeyPem"] = c.publicKeyPem;
-        jmsg["contents"].push_back(jc);
-    }
-    std::string msg = jmsg.dump();
-    std::lock_guard<std::mutex> lock(peersMutex);
-    for (const auto& peer : peers) {
-        if (peer == originPeer) continue; // Don't relay back to sender
-        size_t pos = peer.find(":");
-        if (pos == std::string::npos) continue;
-        std::string host = peer.substr(0, pos);
-        int port = std::stoi(peer.substr(pos + 1));
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock < 0) continue;
-        sockaddr_in serv_addr{};
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(port);
-        inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
-        if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); continue; }
-        send(sock, msg.c_str(), msg.size(), 0);
-        close(sock);
+// On peer connect, compare chain heights and request missing blocks
+void Blockchain::onPeerConnected(const std::string& peerAddress, int peerHeight) {
+    int ourHeight = chain.size() - 1;
+    if (peerHeight > ourHeight) {
+        requestMissingBlocks(ourHeight + 1, peerAddress);
     }
 }

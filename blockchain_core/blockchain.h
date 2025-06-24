@@ -139,6 +139,10 @@ public:
     void addKnownPeer(const std::string& host, int port);
     std::set<std::pair<std::string, int>> getKnownPeers() const;
     void connectToKnownPeers();
+    // --- Automatic Chain Sync ---
+    void requestMissingBlocks(int fromIndex, const std::string& peerAddress);
+    void handleGetBlocksRequest(int fromIndex, const std::string& peerAddress);
+    void onPeerConnected(const std::string& peerAddress, int peerHeight);
 private:
     void handleP2PMessage(const std::string& msg, const std::string& peerAddress);
     std::vector<Block> chain;
@@ -157,6 +161,8 @@ private:
     std::map<std::string, int> peerReputation;
     std::set<std::pair<std::string, int>> knownPeers;
     mutable std::mutex peersMutex;
+    // For thread safety in chain sync
+    mutable std::mutex chainMutex;
     // --- Replay/Double-Spend Protection ---
     std::string calculateTxId(const Transaction& tx) const;
     mutable std::set<std::string> seenTxIds;
