@@ -78,18 +78,17 @@ function scanFileForVirus(filePath) {
 init_blockchain();
 var PostService = class {
   static async createPost(postData, file, userId) {
-    let reward = 25;
-    if (postData.postType === "meme") reward = 45;
-    if (postData.postType === "memory") reward = 67;
-    if (postData.postType === "video") reward = 89;
     const contentType = postData.postType;
     const filename = file ? file.filename : "";
     const uploader = userId;
     const hash = postData.id ? postData.id.toString() : Date.now().toString();
     const args = ["add-content", contentType, filename, uploader, hash];
     let blockchainResult = "";
+    let reward = 1e-4;
     try {
       blockchainResult = await callBlockchainCore(args);
+      const match = blockchainResult.match(/Reward:\s*([0-9.]+)/);
+      if (match) reward = parseFloat(match[1]);
     } catch (err) {
       throw new Error("Blockchain core error: " + err);
     }

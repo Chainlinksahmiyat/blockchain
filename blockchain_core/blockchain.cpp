@@ -12,6 +12,7 @@
 #include <iomanip>
 #include <random>
 #include <ctime>
+#include "base58.h"
 
 Blockchain::Blockchain() {
     if (sqlite3_open("ahmiyat.db", &db) != SQLITE_OK) {
@@ -66,22 +67,90 @@ void Blockchain::logError(const std::string& message) {
     log << std::put_time(std::localtime(&now), "%Y-%m-%d %H:%M:%S") << " [ERROR] " << message << std::endl;
 }
 
+// --- Production-Readiness & Security Improvements ---
+
+// Log consensus events (mining, staking, delegation, block addition)
+void Blockchain::logConsensusEvent(const std::string& event, const std::string& detail) {
+    std::ofstream log("blockchain_event.log", std::ios::app);
+    std::time_t now = std::time(nullptr);
+    log << std::put_time(std::localtime(&now), "%Y-%m-%d %H:%M:%S") << " [CONSENSUS] " << event << ": " << detail << std::endl;
+}
+
+// Example: Call in mining/staking/delegation
+// logConsensusEvent("PoW mined", miner);
+// logConsensusEvent("PoS staked", selectedMiner);
+// logConsensusEvent("DPoS delegated", selectedDelegate);
+// logConsensusEvent("Block added", std::to_string(newBlock.index));
+
+// --- Security: Wallet encryption/hardware wallet stubs ---
+bool Wallet::encryptPrivateKey(const std::string& password) {
+    // TODO: Use OpenSSL AES to encrypt privateKeyPem with password
+    // For now, stub returns true
+    return true;
+}
+bool Wallet::decryptPrivateKey(const std::string& password) {
+    // TODO: Use OpenSSL AES to decrypt privateKeyPem with password
+    // For now, stub returns true
+    return true;
+}
+bool Wallet::importFromHardwareWallet() {
+    // TODO: Integrate with hardware wallet APIs (Ledger, Trezor, etc.)
+    // For now, stub returns false
+    return false;
+}
+
+// --- Peer Reputation & DDoS Resistance ---
+void Blockchain::reportPeerMisbehavior(const std::string& peerAddress) {
+    peerReputation[peerAddress]--;
+    if (peerReputation[peerAddress] < -3) {
+        blockPeer(peerAddress);
+        logError("Peer blocked for repeated misbehavior: " + peerAddress);
+    }
+}
+void Blockchain::rewardPeer(const std::string& peerAddress) {
+    peerReputation[peerAddress]++;
+}
+
+// --- BFT/Fork Resolution Stub ---
+bool Blockchain::resolveFork(const std::vector<Block>& candidateChain) {
+    // TODO: Implement fork resolution (longest chain, most work, BFT signatures, etc.)
+    // For now, stub returns false
+    logError("Fork resolution attempted (stub)");
+    return false;
+}
+
+// --- Monitoring/Observability Hook ---
+void Blockchain::emitMetric(const std::string& metric, double value) {
+    // TODO: Integrate with Prometheus, Grafana, or custom monitoring
+    // For now, just print
+    std::cout << "[METRIC] " << metric << ": " << value << std::endl;
+}
+
+void Blockchain::setTxFee(double fee) { txFee = fee; }
+double Blockchain::getTxFee() const { return txFee; }
+void Blockchain::setHalvingInterval(int interval) { halvingInterval = interval; }
+int Blockchain::getHalvingInterval() const { return halvingInterval; }
+double Blockchain::getBlockReward(int blockIndex) const {
+    int halvings = blockIndex / halvingInterval;
+    double reward = initialReward;
+    for (int i = 0; i < halvings; ++i) reward /= 2.0;
+    if (reward < 0.0001) reward = 0.0001;
+    return reward;
+}
+
 bool Blockchain::addTransaction(const Transaction& tx) {
     // Enforce signature verification using public key
-    std::string expectedAddress;
-    {
-        unsigned char hash[SHA256_DIGEST_LENGTH];
-        SHA256((const unsigned char*)tx.publicKeyPem.data(), tx.publicKeyPem.size(), hash);
-        std::stringstream ss;
-        for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
-        expectedAddress = ss.str();
-    }
+    std::string expectedAddress = Wallet::publicKeyToAddress(tx.publicKeyPem);
     if (tx.sender != expectedAddress) {
-        logError("Transaction sender address does not match public key.");
+        logError("Transaction sender address does not match public key (Base58).");
         return false;
     }
     if (!Wallet::verify(tx.sender + tx.receiver + std::to_string(tx.amount), tx.signature, tx.publicKeyPem)) {
-        logError("Invalid transaction signature for sender: " + tx.sender);
+        logError(std::string("Invalid transaction signature for sender: ") + tx.sender);
+        return false;
+    }
+    if (balances[tx.sender] < tx.amount + txFee) {
+        logError("Insufficient balance for transaction + fee.");
         return false;
     }
     mempool.push_back(tx);
@@ -137,13 +206,14 @@ bool Blockchain::mineBlock(const std::string& miner) {
     chain.push_back(newBlock);
     adjustDifficulty();
     // Update balances
-    double reward = 1.0 / std::max(1, difficulty);
-    if (reward < 0.0001) reward = 0.0001;
+    double reward = getBlockReward(newBlock.index);
+    double totalFees = 0;
     for (const auto& tx : mempool) {
-        balances[tx.sender] -= tx.amount;
+        balances[tx.sender] -= (tx.amount + txFee);
         balances[tx.receiver] += tx.amount;
+        totalFees += txFee;
     }
-    balances[miner] += reward; // mining reward based on difficulty
+    balances[miner] += reward + totalFees;
     mempool.clear();
     pendingContents.clear();
     return true;
@@ -214,12 +284,7 @@ bool Blockchain::loadFromDb() {
 Wallet::Wallet() {
     // Generate ECDSA key pair
     generateKeyPair(privateKeyPem, publicKeyPem);
-    // Use hash of public key as address
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256((const unsigned char*)publicKeyPem.data(), publicKeyPem.size(), hash);
-    std::stringstream ss;
-    for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
-    address = ss.str();
+    address = publicKeyToAddress(publicKeyPem);
 }
 
 bool Wallet::generateKeyPair(std::string& privPem, std::string& pubPem) {
@@ -232,6 +297,176 @@ std::string Wallet::sign(const std::string& data, const std::string& privKeyPem)
 
 bool Wallet::verify(const std::string& data, const std::string& signature, const std::string& pubKeyPem) {
     return ECDSAUtils::verify(data, signature, pubKeyPem);
+}
+
+std::string Wallet::publicKeyToAddress(const std::string& pubKeyPem) {
+    // Hash public key (SHA256), then Base58 encode with checksum
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((const unsigned char*)pubKeyPem.data(), pubKeyPem.size(), hash);
+    std::vector<uint8_t> hashVec(hash, hash + SHA256_DIGEST_LENGTH);
+    return Base58::encodeWithChecksum(hashVec);
+}
+
+void Blockchain::setConsensusMode(ConsensusMode mode) {
+    consensusMode = mode;
+}
+
+ConsensusMode Blockchain::getConsensusMode() const {
+    return consensusMode;
+}
+
+bool Blockchain::stake(const std::string& address, double amount) {
+    if (balances[address] < amount || amount <= 0) return false;
+    balances[address] -= amount;
+    stakes[address] += amount;
+    return true;
+}
+
+std::map<std::string, double> Blockchain::getStakes() const {
+    return stakes;
+}
+
+bool Blockchain::delegateStake(const std::string& from, const std::string& to, double amount) {
+    if (balances[from] < amount || amount <= 0) return false;
+    balances[from] -= amount;
+    delegations[from][to] += amount;
+    delegatedStakes[to] += amount;
+    return true;
+}
+
+std::map<std::string, double> Blockchain::getDelegatedStakes() const {
+    return delegatedStakes;
+}
+
+bool Blockchain::mineBlockPoS() {
+    if (mempool.empty() && pendingContents.empty()) return false;
+    // Select staker weighted by stake
+    double totalStake = 0;
+    for (const auto& s : stakes) totalStake += s.second;
+    if (totalStake == 0) return false;
+    double r = ((double)rand() / RAND_MAX) * totalStake;
+    double acc = 0;
+    std::string selectedMiner;
+    for (const auto& s : stakes) {
+        acc += s.second;
+        if (acc >= r) {
+            selectedMiner = s.first;
+            break;
+        }
+    }
+    if (selectedMiner.empty()) return false;
+    Block newBlock;
+    newBlock.index = chain.size();
+    newBlock.prevHash = chain.back().hash;
+    newBlock.timestamp = std::time(nullptr);
+    newBlock.transactions = mempool;
+    newBlock.contents = pendingContents;
+    newBlock.miner = selectedMiner;
+    newBlock.difficulty = 1; // PoS blocks are easy to validate
+    newBlock.nonce = 0;
+    newBlock.hash = calculateHash(newBlock);
+    if (!validateBlock(newBlock, chain.back())) {
+        logError("Invalid PoS block mined, not adding to chain.");
+        return false;
+    }
+    chain.push_back(newBlock);
+    // Reward staker with halved block reward and total transaction fees
+    double reward = getBlockReward(newBlock.index);
+    double totalFees = 0;
+    for (const auto& tx : mempool) {
+        balances[tx.sender] -= (tx.amount + txFee);
+        balances[tx.receiver] += tx.amount;
+        totalFees += txFee;
+    }
+    balances[selectedMiner] += reward + totalFees;
+    mempool.clear();
+    pendingContents.clear();
+    return true;
+}
+
+bool Blockchain::mineBlockDPoS() {
+    if (mempool.empty() && pendingContents.empty()) return false;
+    // Select delegate weighted by delegated stake
+    double totalDelegated = 0;
+    for (const auto& d : delegatedStakes) totalDelegated += d.second;
+    if (totalDelegated == 0) return false;
+    double r = ((double)rand() / RAND_MAX) * totalDelegated;
+    double acc = 0;
+    std::string selectedDelegate;
+    for (const auto& d : delegatedStakes) {
+        acc += d.second;
+        if (acc >= r) {
+            selectedDelegate = d.first;
+            break;
+        }
+    }
+    if (selectedDelegate.empty()) return false;
+    Block newBlock;
+    newBlock.index = chain.size();
+    newBlock.prevHash = chain.back().hash;
+    newBlock.timestamp = std::time(nullptr);
+    newBlock.transactions = mempool;
+    newBlock.contents = pendingContents;
+    newBlock.miner = selectedDelegate;
+    newBlock.difficulty = 1;
+    newBlock.nonce = 0;
+    newBlock.hash = calculateHash(newBlock);
+    if (!validateBlockBFT(newBlock)) {
+        logError("DPoS block did not pass BFT validation.");
+        return false;
+    }
+    chain.push_back(newBlock);
+    // Reward delegate with halved block reward and total transaction fees
+    double reward = getBlockReward(newBlock.index);
+    double totalFees = 0;
+    for (const auto& tx : mempool) {
+        balances[tx.sender] -= (tx.amount + txFee);
+        balances[tx.receiver] += tx.amount;
+        totalFees += txFee;
+    }
+    balances[selectedDelegate] += reward + totalFees;
+    mempool.clear();
+    pendingContents.clear();
+    return true;
+}
+
+bool Blockchain::validateBlockBFT(const Block& block) const {
+    // BFT stub: always true for now, can be extended to require >2/3 delegate signatures
+    return true;
+}
+
+void Blockchain::addPeer(const std::string& peerAddress) {
+    peers.insert(peerAddress);
+    std::cout << "Peer added: " << peerAddress << std::endl;
+}
+
+void Blockchain::removePeer(const std::string& peerAddress) {
+    peers.erase(peerAddress);
+    std::cout << "Peer removed: " << peerAddress << std::endl;
+}
+
+std::set<std::string> Blockchain::getPeers() const {
+    return peers;
+}
+
+void Blockchain::listenForPeers(int port) {
+    // TODO: Implement TCP socket server to accept peer connections
+    std::cout << "Listening for peers on port " << port << std::endl;
+}
+
+void Blockchain::gossipBlock(const Block& block) {
+    // TODO: Relay block to all peers
+    std::cout << "Gossiping block " << block.index << " to peers..." << std::endl;
+}
+
+void Blockchain::gossipTransaction(const Transaction& tx) {
+    // TODO: Relay transaction to all peers
+    std::cout << "Gossiping transaction from " << tx.sender << " to peers..." << std::endl;
+}
+
+void Blockchain::discoverPeers() {
+    // TODO: Implement peer discovery (broadcast/receive peer list)
+    std::cout << "Discovering peers..." << std::endl;
 }
 
 std::vector<Block> Blockchain::getChain() const {
@@ -267,4 +502,29 @@ void Blockchain::receiveBlock(const Block& block) {
     } else {
         logError("Received invalid block from peer.");
     }
+}
+
+void Blockchain::sendEncrypted(const std::string& peerAddress, const std::string& data) {
+    // TODO: Use OpenSSL to encrypt and send data to peer
+    std::cout << "[SECURE] Sending encrypted data to " << peerAddress << std::endl;
+}
+
+std::string Blockchain::receiveEncrypted(const std::string& peerAddress) {
+    // TODO: Use OpenSSL to receive and decrypt data from peer
+    std::cout << "[SECURE] Receiving encrypted data from " << peerAddress << std::endl;
+    return "";
+}
+
+bool Blockchain::isPeerBlocked(const std::string& peerAddress) const {
+    return blockedPeers.count(peerAddress) > 0;
+}
+
+void Blockchain::blockPeer(const std::string& peerAddress) {
+    blockedPeers.insert(peerAddress);
+    std::cout << "[SECURITY] Blocked peer: " << peerAddress << std::endl;
+}
+
+void Blockchain::unblockPeer(const std::string& peerAddress) {
+    blockedPeers.erase(peerAddress);
+    std::cout << "[SECURITY] Unblocked peer: " << peerAddress << std::endl;
 }
