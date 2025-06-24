@@ -108,7 +108,7 @@ public:
     void requestPeerList();
     void discoverPeers();
     std::set<std::string> getPeers() const;
-    void handleP2PMessage(const std::string& msg);
+    void handleP2PMessage(const std::string& msg, const std::string& peerAddress);
     std::string localAddress;
     void gossipBlock(const Block& block);
     void gossipTransaction(const Transaction& tx);
@@ -139,7 +139,7 @@ public:
     std::set<std::pair<std::string, int>> getKnownPeers() const;
     void connectToKnownPeers();
 private:
-    void handleP2PMessage(const std::string& msg);
+    void handleP2PMessage(const std::string& msg, const std::string& peerAddress);
     std::vector<Block> chain;
     std::vector<Transaction> mempool;
     std::vector<Content> pendingContents;
@@ -156,6 +156,9 @@ private:
     std::map<std::string, int> peerReputation;
     std::set<std::pair<std::string, int>> knownPeers;
     mutable std::mutex peersMutex;
+    // --- Replay/Double-Spend Protection ---
+    std::string calculateTxId(const Transaction& tx) const;
+    mutable std::set<std::string> seenTxIds;
     std::string calculateHash(const Block& block) const;
     void createGenesisBlock();
     bool validProof(const Block& block) const;
@@ -170,6 +173,8 @@ private:
     std::thread p2pServerThread;
     void p2pServerLoop(int port);
     void handlePeerListMessage(const std::string& msg);
+    // --- DDoS Protection ---
+    bool checkPeerRateLimit(const std::string& peerAddress);
 };
 
 #endif // BLOCKCHAIN_H

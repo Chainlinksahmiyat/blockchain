@@ -21,6 +21,9 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <mutex>
+#include <set>
+#include <unordered_map>
+#include <chrono>
 
 // --- PRODUCTION-GRADE FEATURE STUBS & TODOs ---
 
@@ -269,7 +272,29 @@ double Blockchain::getBlockReward(int blockIndex) const {
     return reward;
 }
 
+// --- Replay/Double-Spend Protection ---
+// Set of seen transaction IDs (txids)
+std::set<std::string> seenTxIds;
+
+// Calculate a unique transaction ID (hash of tx fields)
+std::string Blockchain::calculateTxId(const Transaction& tx) const {
+    std::stringstream ss;
+    ss << tx.sender << tx.receiver << tx.amount << tx.signature << tx.publicKeyPem;
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    std::string input = ss.str();
+    SHA256((unsigned char*)input.c_str(), input.size(), hash);
+    std::stringstream out;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; ++i) out << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+    return out.str();
+}
+
 bool Blockchain::addTransaction(const Transaction& tx) {
+    std::string txId = calculateTxId(tx);
+    if (seenTxIds.count(txId)) {
+        logError("Replay/double-spend detected: duplicate txid");
+        return false;
+    }
+    seenTxIds.insert(txId);
     // Enforce signature verification using public key
     std::string expectedAddress = Wallet::publicKeyToAddress(tx.publicKeyPem);
     if (tx.sender != expectedAddress) {
@@ -701,7 +726,14 @@ std::set<std::string> Blockchain::getPeers() const {
     return peers;
 }
 
-void Blockchain::handleP2PMessage(const std::string& msg) {
+void Blockchain::handleP2PMessage(const std::string& msg, const std::string& peerAddress) {
+    // DDoS protection: check rate limit for this peer
+    if (!checkPeerRateLimit(peerAddress)) {
+        logError("Peer rate limit exceeded: " + peerAddress);
+        std::cout << "[P2P] Rate limit exceeded for peer: " << peerAddress << std::endl;
+        reportPeerMisbehavior(peerAddress); // Optionally penalize
+        return;
+    }
     try {
         auto j = nlohmann::json::parse(msg);
         if (j["type"] == "tx") {
@@ -764,6 +796,7 @@ void Blockchain::handleP2PMessage(const std::string& msg) {
         std::cout << "[P2P] Failed to parse message." << std::endl;
     }
 }
+// NOTE: Update all call sites of handleP2PMessage to pass peerAddress as second argument.
 
 // --- Thread Safety for Peers ---
 
@@ -783,4 +816,30 @@ void Blockchain::connectToKnownPeers() {
     for (const auto& [host, port] : knownPeers) {
         connectToPeerTCP(host, port);
     }
+}
+
+// --- DDoS Protection: Rate Limiting, Peer Scoring, Ban List ---
+// Track requests per peer (IP:port string)
+std::unordered_map<std::string, int> peerRequestCount;
+std::unordered_map<std::string, std::chrono::steady_clock::time_point> peerLastRequest;
+const int REQUEST_LIMIT = 100; // max requests per window
+const int REQUEST_WINDOW_SEC = 10; // window in seconds
+
+// Call this at the start of every P2P message handler
+bool Blockchain::checkPeerRateLimit(const std::string& peerAddress) {
+    auto now = std::chrono::steady_clock::now();
+    auto& last = peerLastRequest[peerAddress];
+    if (last.time_since_epoch().count() == 0) last = now;
+    auto& count = peerRequestCount[peerAddress];
+    if (std::chrono::duration_cast<std::chrono::seconds>(now - last).count() > REQUEST_WINDOW_SEC) {
+        count = 0;
+        last = now;
+    }
+    count++;
+    if (count > REQUEST_LIMIT) {
+        reportPeerMisbehavior(peerAddress);
+        logError("Peer rate limit exceeded: " + peerAddress);
+        return false;
+    }
+    return true;
 }
