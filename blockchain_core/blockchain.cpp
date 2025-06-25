@@ -24,6 +24,9 @@
 #include <set>
 #include <unordered_map>
 #include <chrono>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+#include <map>
 
 // --- PRODUCTION-GRADE FEATURE STUBS & TODOs ---
 
@@ -31,17 +34,59 @@
 // TODO: Use OpenSSL/TLS for encrypted P2P communication
 // Example stub for encrypted send/receive
 void Blockchain::sendEncrypted(const std::string& peerAddress, const std::string& data) {
-    // TODO: Use OpenSSL to encrypt and send data to peer
-    // 1. Establish TLS connection
-    // 2. Send data securely
-    std::cout << "[SECURE] Sending encrypted data to " << peerAddress << std::endl;
+    // Parse peerAddress
+    size_t pos = peerAddress.find(":");
+    if (pos == std::string::npos) return;
+    std::string host = peerAddress.substr(0, pos);
+    int port = std::stoi(peerAddress.substr(pos + 1));
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) return;
+    sockaddr_in serv_addr{};
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(port);
+    inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
+    if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); return; }
+    // TLS handshake
+    std::string certFile = "node_cert.pem", keyFile = "node_key.pem";
+    ensure_cert_key(certFile, keyFile);
+    init_openssl_ctx(certFile, keyFile);
+    SSL* ssl = SSL_new(global_ssl_ctx);
+    SSL_set_fd(ssl, sock);
+    if (SSL_connect(ssl) <= 0) { SSL_free(ssl); close(sock); return; }
+    // Send data
+    SSL_write(ssl, data.c_str(), data.size());
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+    close(sock);
 }
+
 std::string Blockchain::receiveEncrypted(const std::string& peerAddress) {
-    // TODO: Use OpenSSL to receive and decrypt data from peer
-    // 1. Establish TLS connection
-    // 2. Receive and decrypt data
-    std::cout << "[SECURE] Receiving encrypted data from " << peerAddress << std::endl;
-    return "";
+    // For demo: this is a client-initiated receive (not a real server accept)
+    size_t pos = peerAddress.find(":");
+    if (pos == std::string::npos) return "";
+    std::string host = peerAddress.substr(0, pos);
+    int port = std::stoi(peerAddress.substr(pos + 1));
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) return "";
+    sockaddr_in serv_addr{};
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(port);
+    inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
+    if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); return ""; }
+    std::string certFile = "node_cert.pem", keyFile = "node_key.pem";
+    ensure_cert_key(certFile, keyFile);
+    init_openssl_ctx(certFile, keyFile);
+    SSL* ssl = SSL_new(global_ssl_ctx);
+    SSL_set_fd(ssl, sock);
+    if (SSL_connect(ssl) <= 0) { SSL_free(ssl); close(sock); return ""; }
+    char buf[4096];
+    int n = SSL_read(ssl, buf, sizeof(buf)-1);
+    std::string result;
+    if (n > 0) { buf[n] = 0; result = buf; }
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+    close(sock);
+    return result;
 }
 
 // TODO: Peer authentication (public key handshake)
@@ -652,21 +697,7 @@ void Blockchain::broadcastPeerList() {
     jmsg["type"] = "peers";
     jmsg["peers"] = std::vector<std::string>(peers.begin(), peers.end());
     for (const auto& peer : peers) {
-        // Parse host:port
-        size_t pos = peer.find(":");
-        if (pos == std::string::npos) continue;
-        std::string host = peer.substr(0, pos);
-        int port = std::stoi(peer.substr(pos + 1));
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock < 0) continue;
-        sockaddr_in serv_addr{};
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(port);
-        inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
-        if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); continue; }
-        std::string msg = jmsg.dump();
-        send(sock, msg.c_str(), msg.size(), 0);
-        close(sock);
+        sendEncrypted(peer, jmsg.dump());
     }
 }
 
@@ -675,20 +706,7 @@ void Blockchain::requestPeerList() {
     nlohmann::json jmsg;
     jmsg["type"] = "getpeers";
     for (const auto& peer : peers) {
-        size_t pos = peer.find(":");
-        if (pos == std::string::npos) continue;
-        std::string host = peer.substr(0, pos);
-        int port = std::stoi(peer.substr(pos + 1));
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock < 0) continue;
-        sockaddr_in serv_addr{};
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(port);
-        inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
-        if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); continue; }
-        std::string msg = jmsg.dump();
-        send(sock, msg.c_str(), msg.size(), 0);
-        close(sock);
+        sendEncrypted(peer, jmsg.dump());
     }
 }
 
@@ -809,20 +827,7 @@ void Blockchain::requestMissingBlocks(int fromIndex, const std::string& peerAddr
     nlohmann::json jmsg;
     jmsg["type"] = "getblocks";
     jmsg["fromIndex"] = fromIndex;
-    std::string msg = jmsg.dump();
-    size_t pos = peerAddress.find(":");
-    if (pos == std::string::npos) return;
-    std::string host = peerAddress.substr(0, pos);
-    int port = std::stoi(peerAddress.substr(pos + 1));
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) return;
-    sockaddr_in serv_addr{};
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(port);
-    inet_pton(AF_INET, host.c_str(), &serv_addr.sin_addr);
-    if (connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) { close(sock); return; }
-    send(sock, msg.c_str(), msg.size(), 0);
-    close(sock);
+    sendEncrypted(peerAddress, jmsg.dump());
 }
 
 // Respond to getblocks request
@@ -861,13 +866,84 @@ bool Blockchain::resolveFork(const std::vector<Block>& candidateChain) {
     return true;
 }
 
+// --- OpenSSL Context and Certificate Management ---
+namespace {
+SSL_CTX* global_ssl_ctx = nullptr;
+bool openssl_initialized = false;
+
+void init_openssl_ctx(const std::string& certFile, const std::string& keyFile) {
+    if (openssl_initialized) return;
+    SSL_load_error_strings();
+    OpenSSL_add_ssl_algorithms();
+    global_ssl_ctx = SSL_CTX_new(TLS_method());
+    if (!global_ssl_ctx) throw std::runtime_error("Failed to create SSL_CTX");
+    if (SSL_CTX_use_certificate_file(global_ssl_ctx, certFile.c_str(), SSL_FILETYPE_PEM) <= 0 ||
+        SSL_CTX_use_PrivateKey_file(global_ssl_ctx, keyFile.c_str(), SSL_FILETYPE_PEM) <= 0) {
+        throw std::runtime_error("Failed to load cert/key for TLS");
+    }
+    openssl_initialized = true;
+}
+
+// For demo: generate self-signed cert if not found (not secure for mainnet!)
+void ensure_cert_key(const std::string& certFile, const std::string& keyFile) {
+    std::ifstream cert(certFile), key(keyFile);
+    if (cert && key) return;
+    cert.close(); key.close();
+    std::string cmd = "openssl req -x509 -newkey rsa:2048 -keyout " + keyFile + " -out " + certFile + " -days 365 -nodes -subj '/CN=AhmiyatNode'";
+    std::system(cmd.c_str());
+}
+}
+
+// --- Peer Public Key Registry (in-memory for demo) ---
+namespace {
+std::map<std::string, std::string> knownPeerPubKeys; // peerAddress -> pubKeyPem
+std::string generate_challenge() {
+    std::string charset = "abcdefghijklmnopqrstuvwxyz0123456789";
+    std::string result;
+    for (int i = 0; i < 32; ++i) result += charset[rand() % charset.size()];
+    return result;
+}
+}
+
 // --- P2P Encryption & Peer Authentication (TLS + Public Key Handshake) ---
-// Use OpenSSL for TLS. On connect, exchange public keys and verify with challenge/response.
-// These are stubs; see sendEncrypted/receiveEncrypted for where to integrate OpenSSL.
 bool Blockchain::performPeerHandshake(int sock, const std::string& expectedPeerPubKey) {
-    // TODO: Exchange public keys, send challenge, verify signature
-    // Use OpenSSL for TLS handshake
-    // Return true if peer is authenticated
+    std::string certFile = "node_cert.pem", keyFile = "node_key.pem";
+    ensure_cert_key(certFile, keyFile);
+    init_openssl_ctx(certFile, keyFile);
+    SSL* ssl = SSL_new(global_ssl_ctx);
+    SSL_set_fd(ssl, sock);
+    int ret = expectedPeerPubKey.empty() ? SSL_accept(ssl) : SSL_connect(ssl);
+    if (ret <= 0) {
+        SSL_free(ssl);
+        return false;
+    }
+    // Exchange public keys (send our pubkey, receive theirs)
+    std::string myPubKeyPem = Wallet::getLocalPublicKeyPem();
+    SSL_write(ssl, myPubKeyPem.c_str(), myPubKeyPem.size());
+    char peerPubKeyBuf[4096] = {0};
+    int n = SSL_read(ssl, peerPubKeyBuf, sizeof(peerPubKeyBuf)-1);
+    if (n <= 0) { SSL_free(ssl); return false; }
+    std::string peerPubKeyPem(peerPubKeyBuf, n);
+    // Challenge/response: send random challenge, expect signed response
+    std::string challenge = generate_challenge();
+    SSL_write(ssl, challenge.c_str(), challenge.size());
+    char sigBuf[4096] = {0};
+    int sigLen = SSL_read(ssl, sigBuf, sizeof(sigBuf)-1);
+    if (sigLen <= 0) { SSL_free(ssl); return false; }
+    std::string signature(sigBuf, sigLen);
+    // Verify signature using received pubkey
+    if (!Wallet::verify(challenge, signature, peerPubKeyPem)) {
+        SSL_free(ssl);
+        return false;
+    }
+    // Optionally, check expectedPeerPubKey
+    if (!expectedPeerPubKey.empty() && peerPubKeyPem != expectedPeerPubKey) {
+        SSL_free(ssl);
+        return false;
+    }
+    // Store peer pubkey for this address (for demo, not persistent)
+    // knownPeerPubKeys[peerAddress] = peerPubKeyPem;
+    SSL_free(ssl);
     return true;
 }
 
