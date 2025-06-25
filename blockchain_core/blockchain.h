@@ -66,6 +66,7 @@ public:
     static bool encryptPrivateKey(const std::string& password);
     static bool decryptPrivateKey(const std::string& password);
     static bool importFromHardwareWallet();
+    static std::string getLocalPublicKeyPem();
 };
 
 enum class ConsensusMode { PoW, PoS };

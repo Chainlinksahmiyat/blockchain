@@ -277,6 +277,11 @@ bool Wallet::importFromHardwareWallet() {
     // For now, stub returns false
     return false;
 }
+std::string Wallet::getLocalPublicKeyPem() {
+    // For demo: return the public key of a default wallet instance
+    static Wallet localWallet;
+    return localWallet.publicKeyPem;
+}
 
 // --- Peer Reputation & DDoS Resistance ---
 void Blockchain::reportPeerMisbehavior(const std::string& peerAddress) {
